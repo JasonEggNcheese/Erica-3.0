@@ -11,6 +11,16 @@ export const useVideoAnalysis = () => {
   const [progressMessage, setProgressMessage] = useState('');
 
   const aiRef = useRef<GoogleGenAI | null>(null);
+  const isCancelledRef = useRef(false);
+
+  const stopAnalysis = useCallback(() => {
+    isCancelledRef.current = true;
+    setIsLoading(false);
+    setAnalysis('');
+    setError(null);
+    setProgress(0);
+    setProgressMessage('');
+  }, []);
 
   const extractFrames = useCallback(async (file: File): Promise<string[]> => {
     return new Promise((resolve, reject) => {
@@ -37,6 +47,10 @@ export const useVideoAnalysis = () => {
         const interval = duration > maxFrames ? duration / maxFrames : 1;
 
         for (let i = 0; i < maxFrames; i++) {
+          if (isCancelledRef.current) {
+            URL.revokeObjectURL(video.src);
+            return reject('Analysis cancelled');
+          }
           const time = i * interval;
           if (time > duration) break;
             
@@ -69,6 +83,7 @@ export const useVideoAnalysis = () => {
       return;
     }
 
+    isCancelledRef.current = false;
     setIsLoading(true);
     setError(null);
     setAnalysis('');
@@ -82,6 +97,8 @@ export const useVideoAnalysis = () => {
       }
 
       const frames = await extractFrames(videoFile);
+      if (isCancelledRef.current) return;
+
       setProgressMessage('Analyzing with Gemini...');
 
       const imageParts = frames.map(frame => ({
@@ -95,19 +112,25 @@ export const useVideoAnalysis = () => {
         model: 'gemini-3-pro-preview',
         contents: { parts: [{ text: prompt }, ...imageParts] },
       });
-
+      
+      if (isCancelledRef.current) return;
       setAnalysis(response.text ?? "No analysis result found.");
 
     } catch (err) {
+      if (isCancelledRef.current) return;
       console.error("Video analysis failed:", err);
       const message = err instanceof Error ? err.message : "An unknown error occurred.";
-      setError(`Failed to analyze video. ${message}`);
+      if (message !== 'Analysis cancelled') {
+        setError(`Failed to analyze video. ${message}`);
+      }
     } finally {
-      setIsLoading(false);
-      setProgress(0);
-      setProgressMessage('');
+      if (!isCancelledRef.current) {
+        setIsLoading(false);
+        setProgress(0);
+        setProgressMessage('');
+      }
     }
   }, [videoFile, extractFrames]);
 
-  return { videoFile, setVideoFile, analysis, isLoading, error, progress, progressMessage, analyzeVideo, setAnalysis, setError };
+  return { videoFile, setVideoFile, analysis, isLoading, error, progress, progressMessage, analyzeVideo, stopAnalysis, setAnalysis, setError };
 };

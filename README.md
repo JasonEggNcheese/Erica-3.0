@@ -6,9 +6,10 @@ ERICA 3.0 is a sophisticated web application showcasing the power of the Google 
 ## ✨ Features
 
 - **🗣️ Real-time Voice Conversation**: Engage in natural, low-latency voice conversations with ERICA.
+  - **🧠 Long-Term Memory**: ERICA remembers key details from your past conversations to provide a personalized and continuous experience. The conversation context is summarized and stored locally in your browser.
   - **Conversation History**: Your conversation is automatically saved and reloaded, so you can pick up where you left off.
   - **Live Transcription**: See the conversation transcribed in real-time.
-  - **Voice Visualizer**: A dynamic orb visualizes ERICA's state (listening, speaking, connecting).
+  - **Animated Avatar**: A dynamic, photorealistic avatar reacts to the conversation state (listening, speaking, connecting).
   - **Selectable Voices**: Customize ERICA's voice to your preference.
   - **Microphone Handling**: Graceful error handling for microphone access and connection issues.
 
@@ -31,6 +32,7 @@ ERICA 3.0 is a sophisticated web application showcasing the power of the Google 
 - **AI Models**:
   - [Google Gemini Live API](https://ai.google.dev/docs/live) (`gemini-2.5-flash-native-audio-preview-12-2025`) for voice conversations.
   - [Google Gemini API](https://ai.google.dev/docs/gemini_api_overview) (`gemini-3-pro-preview`) for video analysis.
+  - [Google Gemini API](https://ai.google.dev/docs/gemini_api_overview) (`gemini-3-flash-preview`) for memory summarization.
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Bundling/Imports**: ES Modules via `esm.sh`
 
@@ -68,6 +70,7 @@ The project is organized into logical directories for better maintainability:
 /
 ├── components/         # Reusable React components (Controls, Tabs, Transcript, etc.)
 ├── hooks/              # Custom React hooks for business logic (useLiveSession, useVideoAnalysis)
+├── memory/             # Logic for long-term memory management
 ├── utils/              # Utility functions (e.g., audio encoding/decoding)
 ├── App.tsx             # Main application component with routing/tabs
 ├── index.html          # The main HTML file
@@ -79,16 +82,17 @@ The project is organized into logical directories for better maintainability:
 
 ## 🧠 How It Works
 
-### Voice Conversation
+### Voice Conversation & Memory
 
 The voice feature is powered by the **Gemini Live API**.
 
 1.  The `useLiveSession` hook manages the connection state and conversation transcript.
-2.  The conversation history is saved to and loaded from the browser's `localStorage`, allowing for persistence between sessions.
-3.  When a session starts, the browser's **Web Audio API** (`getUserMedia`, `AudioContext`) captures microphone input.
-4.  The raw audio is processed, encoded into PCM format, and streamed to the Gemini Live API in real-time.
-5.  The API streams back both the AI's audio response and the real-time transcription of both the user and the AI.
+2.  On session start, the `memoryManager` retrieves a summary of past conversations from the browser's `localStorage`. This summary is injected into the AI's system prompt, giving it long-term context about the user.
+3.  The browser's **Web Audio API** (`getUserMedia`, `AudioContext`) captures microphone input.
+4.  The raw audio is processed, encoded into PCM format, and streamed to the Gemini Live API.
+5.  The API streams back both the AI's audio response and the real-time transcription.
 6.  The incoming audio is decoded and played back seamlessly, while the transcript is updated on the UI.
+7.  After a conversational turn is complete, the `memoryManager` saves the new interaction and triggers a background process to update the long-term memory summary using the `gemini-3-flash-preview` model.
 
 ### Video Analysis
 

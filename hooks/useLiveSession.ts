@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality, Blob } from '@google/genai';
 import { SessionStatus, ConversationTurn, Speaker, availableVoices, VoiceId } from '../types';
 import { decode, encode, decodeAudioData } from '../utils/audioUtils';
+import { getMemory, processNewTurn } from '../memory/memoryManager';
 
 const INPUT_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
@@ -84,6 +85,14 @@ export const useLiveSession = () => {
 
             mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
+            const longTermMemory = getMemory();
+            const baseInstruction = 'You are ERICA, a friendly and helpful conversational AI assistant.';
+            const memoryInstruction = longTermMemory
+                ? `\nHere is a summary of your previous conversations with this user:\n---\n${longTermMemory}\n---\nUse this information to personalize your responses and demonstrate that you remember them.`
+                : '';
+            const systemInstruction = `${baseInstruction}${memoryInstruction}`;
+
+
             sessionPromiseRef.current = aiRef.current.live.connect({
                 model: 'gemini-2.5-flash-native-audio-preview-12-2025',
                 config: {
@@ -91,7 +100,7 @@ export const useLiveSession = () => {
                     speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: selectedVoice }}},
                     inputAudioTranscription: {},
                     outputAudioTranscription: {},
-                    systemInstruction: 'You are ERICA, a friendly and helpful conversational AI assistant.',
+                    systemInstruction: systemInstruction,
                 },
                 callbacks: {
                     onopen: () => {
@@ -217,6 +226,14 @@ export const useLiveSession = () => {
 
         if (message.serverContent?.turnComplete) {
             setTranscript(prev => prev.map(turn => ({...turn, isFinal: true})));
+            
+            const userText = currentInputTranscriptionRef.current.trim();
+            const ericaText = currentOutputTranscriptionRef.current.trim();
+            if (userText.length > 0 && ericaText.length > 0) {
+                // Fire-and-forget memory processing
+                processNewTurn(userText, ericaText);
+            }
+
             currentInputTranscriptionRef.current = '';
             currentOutputTranscriptionRef.current = '';
         }

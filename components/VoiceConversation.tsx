@@ -17,6 +17,7 @@ const VoiceConversation: React.FC = () => {
         stopSession,
         clearTranscript,
         isSpeaking,
+        isSpeakingError,
         errorMessage,
         selectedVoice,
         setSelectedVoice
@@ -25,7 +26,6 @@ const VoiceConversation: React.FC = () => {
       const isConnecting = sessionStatus === SessionStatus.CONNECTING;
       const isConnected = sessionStatus === SessionStatus.CONNECTED;
       const isIdle = sessionStatus === SessionStatus.IDLE || sessionStatus === SessionStatus.DISCONNECTED;
-      const isError = sessionStatus === SessionStatus.ERROR;
       const isSessionActive = isConnecting || isConnected;
 
     return (
@@ -54,23 +54,23 @@ const VoiceConversation: React.FC = () => {
                 </div>
                 
                 <div className="flex-shrink-0 w-full flex flex-col items-center justify-center space-y-8 py-8">
-                    <VoiceVisualizer status={sessionStatus} isSpeaking={isSpeaking} />
+                    <VoiceVisualizer status={sessionStatus} isSpeaking={isSpeaking} isSpeakingError={isSpeakingError} />
 
-                    {isError && (
+                    {errorMessage && (
                       <div className="flex items-center space-x-2 bg-red-500/20 text-red-300 p-3 rounded-lg max-w-md">
                         <WifiOff className="h-5 w-5 flex-shrink-0" />
-                        <p className="text-sm">{errorMessage || 'An unknown error occurred. Please try again.'}</p>
+                        <p className="text-sm">{errorMessage}</p>
                       </div>
                     )}
 
-                    {isIdle && !isError && (
+                    {!errorMessage && isIdle && (
                          <div className="flex items-center space-x-2 bg-blue-500/10 text-blue-300 p-3 rounded-lg max-w-md">
                             <Info className="h-5 w-5 flex-shrink-0" />
                             <p className="text-sm">Press the button below to start a conversation with ERICA.</p>
                         </div>
                     )}
 
-                    {isConnecting && <p className="text-purple-300 animate-pulse">Connecting to ERICA...</p>}
+                    {!errorMessage && isConnecting && <p className="text-purple-300 animate-pulse">Connecting to ERICA...</p>}
                     
                     <Controls
                         sessionStatus={sessionStatus}

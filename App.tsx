@@ -3,8 +3,9 @@ import React, { useState } from 'react';
 import Tabs from './components/Tabs';
 import VoiceConversation from './components/VoiceConversation';
 import VideoAnalysis from './components/VideoAnalysis';
+import LiveAnalysis from './components/LiveAnalysis';
 
-export type Tab = 'voice' | 'video';
+export type Tab = 'voice' | 'video' | 'live';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('voice');
@@ -19,6 +20,7 @@ const App: React.FC = () => {
       <main className="flex-grow flex flex-col overflow-hidden">
         {activeTab === 'voice' && <VoiceConversation />}
         {activeTab === 'video' && <VideoAnalysis />}
+        {activeTab === 'live' && <LiveAnalysis />}
       </main>
     </div>
   );

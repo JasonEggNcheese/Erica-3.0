@@ -18,10 +18,14 @@ ERICA 3.0 is a sophisticated web application showcasing the power of the Google 
   - **Custom Prompts**: Ask specific questions about the video to guide the AI's analysis.
   - **Frame Extraction**: The application automatically extracts keyframes from the video for analysis.
   - **Progress Indicators**: Clear feedback on the frame extraction and analysis process.
-  - **Powered by Gemini Pro**: Utilizes the `gemini-3-pro-preview` model for detailed video understanding.
+
+- **📸 Live Camera Analysis**: Use your device's camera for real-time video analysis.
+  - **Live Camera Feed**: View your camera's feed directly in the app.
+  - **Continuous Analysis**: Ask a question (e.g., "What objects do you see?") and ERICA will provide continuous updates based on what the camera sees.
+  - **Real-time Insights**: Powered by the `gemini-3-pro-preview` model for sophisticated, real-time visual understanding.
 
 - **Modern UI/UX**:
-  - **Tabbed Interface**: Easily switch between Voice Conversation and Video Analysis modes.
+  - **Tabbed Interface**: Easily switch between Voice Conversation, Video Analysis, and Live Analysis modes.
   - **Responsive Design**: A clean, intuitive layout that works great on all screen sizes.
   - **Sleek Aesthetics**: A dark, futuristic theme with smooth animations and transitions.
 
@@ -31,7 +35,7 @@ ERICA 3.0 is a sophisticated web application showcasing the power of the Google 
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
 - **AI Models**:
   - [Google Gemini Live API](https://ai.google.dev/docs/live) (`gemini-2.5-flash-native-audio-preview-12-2025`) for voice conversations.
-  - [Google Gemini API](https://ai.google.dev/docs/gemini_api_overview) (`gemini-3-pro-preview`) for video analysis.
+  - [Google Gemini API](https://ai.google.dev/docs/gemini_api_overview) (`gemini-3-pro-preview`) for video and live camera analysis.
   - [Google Gemini API](https://ai.google.dev/docs/gemini_api_overview) (`gemini-3-flash-preview`) for memory summarization.
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Bundling/Imports**: ES Modules via `esm.sh`
@@ -42,7 +46,7 @@ Follow these instructions to get a copy of the project up and running on your lo
 
 ### Prerequisites
 
-You need to have a modern web browser and a working microphone for the voice conversation feature.
+You need to have a modern web browser and a working microphone and camera.
 
 ### Configuration
 
@@ -85,22 +89,24 @@ The project is organized into logical directories for better maintainability:
 ### Voice Conversation & Memory
 
 The voice feature is powered by the **Gemini Live API**.
-
 1.  The `useLiveSession` hook manages the connection state and conversation transcript.
-2.  On session start, the `memoryManager` retrieves a summary of past conversations from the browser's `localStorage`. This summary is injected into the AI's system prompt, giving it long-term context about the user.
-3.  The browser's **Web Audio API** (`getUserMedia`, `AudioContext`) captures microphone input.
-4.  The raw audio is processed, encoded into PCM format, and streamed to the Gemini Live API.
-5.  The API streams back both the AI's audio response and the real-time transcription.
-6.  The incoming audio is decoded and played back seamlessly, while the transcript is updated on the UI.
-7.  After a conversational turn is complete, the `memoryManager` saves the new interaction and triggers a background process to update the long-term memory summary using the `gemini-3-flash-preview` model.
+2.  On session start, the `memoryManager` retrieves a summary of past conversations from `localStorage` and injects it into the AI's system prompt for context.
+3.  The **Web Audio API** (`getUserMedia`, `AudioContext`) captures microphone input, which is streamed to the Gemini Live API.
+4.  The API streams back both the AI's audio response and the real-time transcription.
+5.  After a conversational turn, `memoryManager` triggers a background process to update the long-term memory summary using `gemini-3-flash-preview`.
 
-### Video Analysis
+### Video Analysis (File Upload)
 
 The video analysis feature uses the `gemini-3-pro-preview` model.
+1.  The `useVideoAnalysis` hook handles the workflow.
+2.  When a user uploads a video, a `<video>` element is used to seek through the timeline and capture keyframes on a `<canvas>`.
+3.  These frames are sent as a multi-part request to the Gemini API, which returns a text summary.
 
-1.  The `useVideoAnalysis` hook handles the entire analysis workflow.
-2.  When a user uploads a video, a `<video>` element is used in the background to seek through the timeline.
-3.  Keyframes are captured at set intervals and drawn onto a `<canvas>` element.
-4.  These frames are converted to base64-encoded JPEGs.
-5.  The frames, along with a text prompt, are sent to the Gemini API as a multi-part request.
-6.  The model analyzes the sequence of frames and returns a text summary, which is then displayed to the user.
+### Live Camera Analysis
+
+The live analysis feature also uses the `gemini-3-pro-preview` model.
+1.  The `useLiveAnalysis` hook manages camera access and the analysis loop.
+2.  `navigator.mediaDevices.getUserMedia` is used to access the camera feed and display it in a `<video>` element.
+3.  When analysis starts, `setInterval` is used to periodically capture a frame from the video stream onto a `<canvas>`.
+4.  Each frame, along with the user's text prompt, is sent to the Gemini API.
+5.  The model's response is displayed, providing a near real-time analysis of the camera feed.

@@ -5,6 +5,7 @@ import { GoogleGenAI, LiveServerMessage, Modality, Blob } from '@google/genai';
 import { SessionStatus, ConversationTurn, Speaker, availableVoices, VoiceId } from '../types';
 import { decode, encode, decodeAudioData } from '../utils/audioUtils';
 import { getMemory, processNewTurn } from '../memory/memoryManager';
+import { useTextToSpeech } from './useTextToSpeech';
 
 const INPUT_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
@@ -32,14 +33,7 @@ export const useLiveSession = () => {
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [selectedVoice, setSelectedVoice] = useState<VoiceId>(availableVoices[0].id);
 
-    // Effect to save transcript to localStorage whenever it changes
-    useEffect(() => {
-        try {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(transcript));
-        } catch (error) {
-            console.error("Failed to save conversation history:", error);
-        }
-    }, [transcript]);
+    const { speak: speakError, isSpeaking: isSpeakingError } = useTextToSpeech();
 
     const aiRef = useRef<GoogleGenAI | null>(null);
     // FIX: Replaced 'LiveSession' with 'any' since it's not an exported type.
@@ -85,7 +79,18 @@ export const useLiveSession = () => {
 
             mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-            const longTermMemory = getMemory();
+            let longTermMemory: string | null = null;
+            try {
+                longTermMemory = getMemory();
+            } catch (error) {
+                if (error instanceof Error) {
+                    console.error("Memory loading failed:", error.message);
+                    const spokenErrorMessage = "Just a heads-up, I'm having a little trouble accessing my long-term memory, so I might not recall our previous chats. We can still have a great conversation though!";
+                    speakError(spokenErrorMessage);
+                    setErrorMessage(error.message);
+                }
+            }
+
             const baseInstruction = 'You are ERICA, a friendly and helpful conversational AI assistant.';
             const memoryInstruction = longTermMemory
                 ? `\nHere is a summary of your previous conversations with this user:\n---\n${longTermMemory}\n---\nUse this information to personalize your responses and demonstrate that you remember them.`
@@ -139,6 +144,8 @@ export const useLiveSession = () => {
                     },
                     onerror: (e) => {
                         console.error('Session error:', e);
+                        const spokenErrorMessage = "Oops, I think I tripped over a cable in the cloud. The connection was lost. Please try again.";
+                        speakError(spokenErrorMessage);
                         setErrorMessage("A connection error occurred. Please check your console for details.");
                         stopSession(SessionStatus.ERROR, false);
                     },
@@ -148,23 +155,30 @@ export const useLiveSession = () => {
         } catch (error) {
             console.error("Failed to start session:", error);
             let userFriendlyMessage = "An unknown error occurred while starting the session.";
+            let spokenErrorMessage = "An unknown error occurred while starting the session. Please check the console for details.";
+            
             if (error instanceof DOMException) {
                 if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
                     userFriendlyMessage = 'No microphone found. Please make sure your microphone is connected and working.';
+                    spokenErrorMessage = "Houston, we have a problem... and it's a missing microphone. Please connect one so I can hear your lovely voice.";
                 } else if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
                     userFriendlyMessage = 'Microphone access has been denied. Please enable it in your browser settings to use ERICA.';
+                    spokenErrorMessage = "It seems my voice isn't the only one being silenced. Could you please enable microphone access in your browser settings so we can chat?";
                 } else {
                     userFriendlyMessage = `Could not access microphone: ${error.message}`;
+                    spokenErrorMessage = `I couldn't access the microphone. The browser says: ${error.message}`;
                 }
             } else if (error instanceof Error) {
                 userFriendlyMessage = error.message;
+                spokenErrorMessage = `An error occurred: ${error.message}`;
             }
             
+            speakError(spokenErrorMessage);
             setErrorMessage(userFriendlyMessage);
             setSessionStatus(SessionStatus.ERROR);
             await stopSession(SessionStatus.ERROR, false);
         }
-    }, [selectedVoice]);
+    }, [selectedVoice, speakError]);
 
     const stopSession = useCallback(async (finalStatus = SessionStatus.DISCONNECTED, shouldClose = true) => {
         if (shouldClose && sessionPromiseRef.current) {
@@ -176,14 +190,29 @@ export const useLiveSession = () => {
             }
         }
 
+        // Save final transcript to localStorage
+        setTranscript(currentTranscript => {
+            try {
+                 if (currentTranscript.length > 0) {
+                    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentTranscript));
+                 }
+            } catch (error) {
+                console.error("Failed to save conversation history:", error);
+                setErrorMessage("Could not save conversation history to your browser's storage.");
+                 setTimeout(() => setErrorMessage(null), 5000);
+            }
+            return currentTranscript;
+        });
+
+
         scriptProcessorRef.current?.disconnect();
         mediaStreamSourceRef.current?.disconnect();
-        audioContextRef.current?.close();
+        audioContextRef.current?.close().catch(console.error);
         mediaStreamRef.current?.getTracks().forEach(track => track.stop());
 
         audioSourcesRef.current.forEach(source => source.stop());
         audioSourcesRef.current.clear();
-        outputAudioContextRef.current?.close();
+        outputAudioContextRef.current?.close().catch(console.error);
 
         sessionPromiseRef.current = null;
         mediaStreamRef.current = null;
@@ -230,8 +259,15 @@ export const useLiveSession = () => {
             const userText = currentInputTranscriptionRef.current.trim();
             const ericaText = currentOutputTranscriptionRef.current.trim();
             if (userText.length > 0 && ericaText.length > 0) {
-                // Fire-and-forget memory processing
-                processNewTurn(userText, ericaText);
+                // Fire-and-forget memory processing with error handling
+                processNewTurn(userText, ericaText).catch(error => {
+                    if (error instanceof Error) {
+                        console.error("Failed to save memory:", error.message);
+                        setErrorMessage(error.message);
+                        // Clear the non-critical error message after a few seconds
+                        setTimeout(() => setErrorMessage(null), 5000);
+                    }
+                });
             }
 
             currentInputTranscriptionRef.current = '';
@@ -278,5 +314,5 @@ export const useLiveSession = () => {
         };
     }, [stopSession]);
 
-    return { sessionStatus, transcript, startSession, stopSession, clearTranscript, isSpeaking, errorMessage, selectedVoice, setSelectedVoice };
+    return { sessionStatus, transcript, startSession, stopSession, clearTranscript, isSpeaking, isSpeakingError, errorMessage, selectedVoice, setSelectedVoice };
 };

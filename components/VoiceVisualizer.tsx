@@ -5,11 +5,12 @@ import { SessionStatus } from '../types';
 interface VoiceVisualizerProps {
   status: SessionStatus;
   isSpeaking: boolean;
+  isSpeakingError: boolean;
 }
 
 const AVATAR_URL = 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&dpr=1';
 
-const VoiceVisualizer: React.FC<VoiceVisualizerProps> = ({ status, isSpeaking }) => {
+const VoiceVisualizer: React.FC<VoiceVisualizerProps> = ({ status, isSpeaking, isSpeakingError }) => {
   const isConnected = status === SessionStatus.CONNECTED;
 
   const baseClasses = "relative w-48 h-48 md:w-64 md:h-64 rounded-full transition-all duration-500 ease-in-out flex items-center justify-center overflow-hidden shadow-2xl";
@@ -58,7 +59,7 @@ const VoiceVisualizer: React.FC<VoiceVisualizerProps> = ({ status, isSpeaking })
         glowOpacity: 'opacity-70',
         glowBg: 'bg-red-600',
         avatarFilter: 'grayscale brightness-75',
-        animation: 'animate-shake' // Custom shake animation
+        animation: isSpeakingError ? 'animate-pulse' : 'animate-shake'
       };
   }
 

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Mic, Video } from 'lucide-react';
+import { Mic, Video, Camera } from 'lucide-react';
 import { Tab } from '../App';
 
 interface TabsProps {
@@ -12,6 +12,7 @@ const Tabs: React.FC<TabsProps> = ({ activeTab, setActiveTab }) => {
   const tabs = [
     { id: 'voice', label: 'Voice Conversation', icon: Mic },
     { id: 'video', label: 'Video Analysis', icon: Video },
+    { id: 'live', label: 'Live Analysis', icon: Camera },
   ];
 
   return (

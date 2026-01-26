@@ -64,6 +64,10 @@ export const useVideoAnalysis = () => {
       setError("Please select a video file first.");
       return;
     }
+     if (!prompt) {
+      setError("Please enter a prompt or question for the analysis.");
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -87,11 +91,9 @@ export const useVideoAnalysis = () => {
         },
       }));
 
-      const fullPrompt = `${prompt} Based on these frames, describe what is happening in the video.`;
-
       const response = await aiRef.current.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: { parts: [{ text: fullPrompt }, ...imageParts] },
+        contents: { parts: [{ text: prompt }, ...imageParts] },
       });
 
       setAnalysis(response.text ?? "No analysis result found.");

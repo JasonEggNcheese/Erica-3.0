@@ -8,13 +8,37 @@ import { decode, encode, decodeAudioData } from '../utils/audioUtils';
 const INPUT_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
 const BUFFER_SIZE = 4096;
+const LOCAL_STORAGE_KEY = 'erica-conversation-history';
 
 export const useLiveSession = () => {
     const [sessionStatus, setSessionStatus] = useState<SessionStatus>(SessionStatus.IDLE);
-    const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
+    const [transcript, setTranscript] = useState<ConversationTurn[]>(() => {
+        try {
+            const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                // Basic validation
+                if (Array.isArray(parsed)) {
+                    return parsed;
+                }
+            }
+        } catch (error) {
+            console.error("Failed to load or parse conversation history:", error);
+        }
+        return [];
+    });
     const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [selectedVoice, setSelectedVoice] = useState<VoiceId>(availableVoices[0].id);
+
+    // Effect to save transcript to localStorage whenever it changes
+    useEffect(() => {
+        try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(transcript));
+        } catch (error) {
+            console.error("Failed to save conversation history:", error);
+        }
+    }, [transcript]);
 
     const aiRef = useRef<GoogleGenAI | null>(null);
     // FIX: Replaced 'LiveSession' with 'any' since it's not an exported type.
@@ -34,11 +58,16 @@ export const useLiveSession = () => {
 
     const clearTranscript = useCallback(() => {
         setTranscript([]);
+        try {
+            localStorage.removeItem(LOCAL_STORAGE_KEY);
+        } catch (error) {
+            console.error("Failed to clear conversation history from localStorage:", error);
+        }
     }, []);
 
     const startSession = useCallback(async () => {
         setSessionStatus(SessionStatus.CONNECTING);
-        setTranscript([]);
+        // Do not clear transcript here to allow resuming conversations
         setErrorMessage(null);
 
         try {

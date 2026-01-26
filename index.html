@@ -18,6 +18,43 @@
   }
 }
 </script>
+<style>
+  /* Custom animations for the avatar */
+  @keyframes subtle-breathing {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.03); }
+  }
+  .animate-subtle-breathing {
+    animation: subtle-breathing 4s ease-in-out infinite;
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+  }
+  .animate-shake {
+    animation: shake 0.5s ease-in-out;
+  }
+
+  /* Custom scrollbar for transcript */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #a855f7BF transparent; /* thumb color track color */
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #a855f7BF;
+    border-radius: 20px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+</style>
 </head>
   <body class="bg-gray-900 text-white">
     <div id="root"></div>

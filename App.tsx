@@ -2,10 +2,9 @@
 import React, { useState } from 'react';
 import Tabs from './components/Tabs';
 import VoiceConversation from './components/VoiceConversation';
-import VideoAnalysis from './components/VideoAnalysis';
-import LiveAnalysis from './components/LiveAnalysis';
+import AgenticVision from './components/AgenticVision';
 
-export type Tab = 'voice' | 'video' | 'live';
+export type Tab = 'voice' | 'agentic';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('voice');
@@ -19,8 +18,7 @@ const App: React.FC = () => {
 
       <main className="flex-grow flex flex-col overflow-hidden">
         {activeTab === 'voice' && <VoiceConversation />}
-        {activeTab === 'video' && <VideoAnalysis />}
-        {activeTab === 'live' && <LiveAnalysis />}
+        {activeTab === 'agentic' && <AgenticVision />}
       </main>
     </div>
   );

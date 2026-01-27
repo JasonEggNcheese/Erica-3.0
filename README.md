@@ -1,7 +1,7 @@
 
-# ERICA 3.0: Conversational AI with Voice & Video Understanding
+# ERICA 3.0: Conversational AI with Voice & Vision
 
-ERICA 3.0 is a sophisticated web application showcasing the power of the Google Gemini API. It provides a seamless, real-time conversational experience with a voice assistant and offers powerful video analysis capabilities, all wrapped in a sleek, modern user interface.
+ERICA 3.0 is a sophisticated web application showcasing the power of the Google Gemini API. It provides a seamless, real-time conversational experience with a voice assistant and offers powerful agentic vision capabilities, all wrapped in a sleek, modern user interface.
 
 ## ✨ Features
 
@@ -13,19 +13,14 @@ ERICA 3.0 is a sophisticated web application showcasing the power of the Google 
   - **Selectable Voices**: Customize ERICA's voice to your preference.
   - **Microphone Handling**: Graceful error handling for microphone access and connection issues.
 
-- **🎬 Video Analysis**: Upload video files and receive a concise, AI-generated summary of their content.
-  - **Simple Upload**: Drag-and-drop or use a file picker to select a video.
-  - **Custom Prompts**: Ask specific questions about the video to guide the AI's analysis.
-  - **Frame Extraction**: The application automatically extracts keyframes from the video for analysis.
-  - **Progress Indicators**: Clear feedback on the frame extraction and analysis process.
-
-- **📸 Live Camera Analysis**: Use your device's camera for real-time video analysis.
-  - **Live Camera Feed**: View your camera's feed directly in the app.
-  - **Continuous Analysis**: Ask a question (e.g., "What objects do you see?") and ERICA will provide continuous updates based on what the camera sees.
-  - **Real-time Insights**: Powered by the `gemini-3-pro-preview` model for sophisticated, real-time visual understanding.
+- **🤖 Agentic Vision**: Grant ERICA "eyes" via your camera or screen share and give her commands.
+  - **Screen & Camera Understanding**: ERICA can "see" what's on your screen or in front of your camera.
+  - **Natural Language Commands**: Give instructions in plain English, like "Click on the 'Login' button."
+  - **AI-Powered Action Planning**: Using Gemini's function calling, ERICA analyzes the visual input and your command to generate a step-by-step plan.
+  - **Transparent Reasoning**: The generated plan (e.g., `CLICK`, `TYPE`, `SCROLL`) is displayed for you to see, providing a clear look into the AI's thought process. **Note**: For security, ERICA only displays the planned actions and does not execute them on your device.
 
 - **Modern UI/UX**:
-  - **Tabbed Interface**: Easily switch between Voice Conversation, Video Analysis, and Live Analysis modes.
+  - **Tabbed Interface**: Easily switch between Voice Conversation and Agentic Vision modes.
   - **Responsive Design**: A clean, intuitive layout that works great on all screen sizes.
   - **Sleek Aesthetics**: A dark, futuristic theme with smooth animations and transitions.
 
@@ -35,7 +30,7 @@ ERICA 3.0 is a sophisticated web application showcasing the power of the Google 
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
 - **AI Models**:
   - [Google Gemini Live API](https://ai.google.dev/docs/live) (`gemini-2.5-flash-native-audio-preview-12-2025`) for voice conversations.
-  - [Google Gemini API](https://ai.google.dev/docs/gemini_api_overview) (`gemini-3-pro-preview`) for video and live camera analysis.
+  - [Google Gemini API](https://ai.google.dev/docs/gemini_api_overview) (`gemini-3-pro-preview`) for agentic vision.
   - [Google Gemini API](https://ai.google.dev/docs/gemini_api_overview) (`gemini-3-flash-preview`) for memory summarization.
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Bundling/Imports**: ES Modules via `esm.sh`
@@ -73,7 +68,7 @@ The project is organized into logical directories for better maintainability:
 ```
 /
 ├── components/         # Reusable React components (Controls, Tabs, Transcript, etc.)
-├── hooks/              # Custom React hooks for business logic (useLiveSession, useVideoAnalysis)
+├── hooks/              # Custom React hooks for business logic (useLiveSession, useAgenticVision)
 ├── memory/             # Logic for long-term memory management
 ├── utils/              # Utility functions (e.g., audio encoding/decoding)
 ├── App.tsx             # Main application component with routing/tabs
@@ -95,18 +90,11 @@ The voice feature is powered by the **Gemini Live API**.
 4.  The API streams back both the AI's audio response and the real-time transcription.
 5.  After a conversational turn, `memoryManager` triggers a background process to update the long-term memory summary using `gemini-3-flash-preview`.
 
-### Video Analysis (File Upload)
+### Agentic Vision
 
-The video analysis feature uses the `gemini-3-pro-preview` model.
-1.  The `useVideoAnalysis` hook handles the workflow.
-2.  When a user uploads a video, a `<video>` element is used to seek through the timeline and capture keyframes on a `<canvas>`.
-3.  These frames are sent as a multi-part request to the Gemini API, which returns a text summary.
-
-### Live Camera Analysis
-
-The live analysis feature also uses the `gemini-3-pro-preview` model.
-1.  The `useLiveAnalysis` hook manages camera access and the analysis loop.
-2.  `navigator.mediaDevices.getUserMedia` is used to access the camera feed and display it in a `<video>` element.
-3.  When analysis starts, `setInterval` is used to periodically capture a frame from the video stream onto a `<canvas>`.
-4.  Each frame, along with the user's text prompt, is sent to the Gemini API.
-5.  The model's response is displayed, providing a near real-time analysis of the camera feed.
+The agentic vision feature uses **function calling** with the `gemini-3-pro-preview` model to simulate desktop control.
+1. The `useAgenticVision` hook manages the state for camera and screen sharing (`getDisplayMedia`).
+2. When the user provides a command, a single frame is captured from the active video/screen stream.
+3. This frame, along with the user prompt and a set of predefined `functionDeclarations` (tools like `CLICK`, `TYPE`, `SCROLL`), is sent to the Gemini API.
+4. The model analyzes the image and the command, then returns a structured `FunctionCall` response, detailing its thought process and the sequence of actions it would take to accomplish the goal.
+5. The UI then parses and displays this plan, offering a transparent view into the AI's reasoning without executing any actions on the user's machine.

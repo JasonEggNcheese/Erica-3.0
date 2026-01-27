@@ -27,3 +27,17 @@ export const availableVoices = [
 ] as const;
 
 export type VoiceId = typeof availableVoices[number]['id'];
+
+
+// Types for Agentic Vision
+export type ActionType = 'TYPE' | 'CLICK' | 'SCROLL' | 'WAIT' | 'FINISH';
+
+export interface AgentAction {
+  action_type: ActionType;
+  x?: number;
+  y?: number;
+  text_to_type?: string;
+  scroll_direction?: 'up' | 'down';
+  duration?: number;
+  thought: string;
+}

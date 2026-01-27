@@ -1,19 +1,29 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 
-const ANALYSIS_INTERVAL = 3000; // milliseconds
+const ANALYSIS_INTERVAL = 2000; // milliseconds
 
-export const useLiveAnalysis = () => {
+export interface DetectedObject {
+    label: string;
+    confidence: number;
+    box: {
+        x1: number;
+        y1: number;
+        x2: number;
+        y2: number;
+    };
+}
+
+export const useObjectDetection = () => {
     const [isCameraOn, setIsCameraOn] = useState(false);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [analysis, setAnalysis] = useState('');
+    const [isDetecting, setIsDetecting] = useState(false);
+    const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [statusMessage, setStatusMessage] = useState('Camera is off.');
 
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
-    // FIX: Replaced 'NodeJS.Timeout' with 'number' for browser compatibility.
     const analysisIntervalRef = useRef<number | null>(null);
     const aiRef = useRef<GoogleGenAI | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -25,12 +35,12 @@ export const useLiveAnalysis = () => {
         setStatusMessage('Starting camera...');
         try {
             mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ 
-                video: { width: 1280, height: 720 } 
+                video: { width: 1280, height: 720, facingMode: 'environment' } 
             });
             videoRef.current.srcObject = mediaStreamRef.current;
             await videoRef.current.play();
             setIsCameraOn(true);
-            setStatusMessage('Camera is on. Enter a prompt and start analysis.');
+            setStatusMessage('Camera is on. Press Start to detect objects.');
         } catch (err) {
             console.error("Camera access error:", err);
             let userMessage = "Failed to access camera.";
@@ -47,7 +57,7 @@ export const useLiveAnalysis = () => {
     }, []);
 
     const stopCamera = useCallback(() => {
-        if(isAnalyzing) stopAnalysis();
+        if(isDetecting) stopDetection();
         if (mediaStreamRef.current) {
             mediaStreamRef.current.getTracks().forEach(track => track.stop());
         }
@@ -55,13 +65,12 @@ export const useLiveAnalysis = () => {
             videoRef.current.srcObject = null;
         }
         setIsCameraOn(false);
+        setDetectedObjects([]);
         setStatusMessage('Camera is off.');
-    }, [isAnalyzing]);
+    }, [isDetecting]);
     
-    const analyzeFrame = useCallback(async (prompt: string) => {
-        if (isProcessingFrame.current || !videoRef.current || videoRef.current.readyState < 2) {
-             return;
-        }
+    const detectFrame = useCallback(async () => {
+        if (isProcessingFrame.current || !videoRef.current || videoRef.current.readyState < 2) return;
 
         isProcessingFrame.current = true;
         
@@ -88,56 +97,78 @@ export const useLiveAnalysis = () => {
                 aiRef.current = new GoogleGenAI({ apiKey: process.env.API_KEY });
             }
             
-            const imagePart = {
-                inlineData: { mimeType: 'image/jpeg', data: frameData },
+            const imagePart = { inlineData: { mimeType: 'image/jpeg', data: frameData } };
+            
+            const objectDetectionSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    objects: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                label: { type: Type.STRING },
+                                confidence: { type: Type.NUMBER },
+                                box: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        x1: { type: Type.NUMBER },
+                                        y1: { type: Type.NUMBER },
+                                        x2: { type: Type.NUMBER },
+                                        y2: { type: Type.NUMBER },
+                                    },
+                                    required: ['x1', 'y1', 'x2', 'y2']
+                                }
+                            },
+                            required: ['label', 'confidence', 'box']
+                        }
+                    }
+                },
+                required: ['objects']
             };
 
             const response = await aiRef.current.models.generateContent({
                 model: 'gemini-3-pro-preview',
-                contents: { parts: [{ text: prompt }, imagePart] },
+                contents: { parts: [
+                    { text: 'Analyze the image to detect and locate objects. For each object, provide its label, a confidence score from 0 to 1, and its normalized bounding box coordinates (x1, y1, x2, y2).' },
+                    imagePart
+                ]},
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: objectDetectionSchema
+                }
             });
 
-            setAnalysis(response.text ?? 'No response from AI.');
+            const responseJson = JSON.parse(response.text ?? '{}');
+            setDetectedObjects(responseJson.objects || []);
 
         } catch (err) {
-            console.error("Frame analysis error:", err);
-            setError(err instanceof Error ? err.message : "An unknown error occurred during analysis.");
-            // Stop analysis on error to avoid repeated failures
-            stopAnalysis();
+            console.error("Frame detection error:", err);
+            setError(err instanceof Error ? err.message : "An unknown error occurred during detection.");
+            stopDetection();
         } finally {
             isProcessingFrame.current = false;
         }
     }, []);
 
-
-    const startAnalysis = useCallback((prompt: string) => {
-        if (!prompt.trim()) {
-            setError('Please enter a prompt before starting analysis.');
-            return;
-        }
+    const startDetection = useCallback(() => {
         setError(null);
-        setIsAnalyzing(true);
-        setStatusMessage('Live analysis in progress...');
-        setAnalysis('Starting analysis...');
+        setIsDetecting(true);
+        setStatusMessage('Detecting objects...');
+        setDetectedObjects([]);
         
-        // Initial call
-        analyzeFrame(prompt);
-        
-        // Subsequent calls on interval
-        // FIX: Use window.setInterval and cast to number to ensure browser compatibility.
-        analysisIntervalRef.current = window.setInterval(() => {
-            analyzeFrame(prompt);
-        }, ANALYSIS_INTERVAL) as unknown as number;
+        detectFrame();
+        analysisIntervalRef.current = window.setInterval(detectFrame, ANALYSIS_INTERVAL);
 
-    }, [analyzeFrame]);
+    }, [detectFrame]);
 
-    const stopAnalysis = useCallback(() => {
+    const stopDetection = useCallback(() => {
         if (analysisIntervalRef.current) {
             window.clearInterval(analysisIntervalRef.current);
             analysisIntervalRef.current = null;
         }
-        setIsAnalyzing(false);
-        setStatusMessage('Analysis stopped.');
+        setIsDetecting(false);
+        setStatusMessage('Detection stopped.');
     }, []);
 
     useEffect(() => {
@@ -154,13 +185,13 @@ export const useLiveAnalysis = () => {
     return {
         videoRef,
         isCameraOn,
-        isAnalyzing,
-        analysis,
+        isDetecting,
+        detectedObjects,
         error,
         statusMessage,
         startCamera,
         stopCamera,
-        startAnalysis,
-        stopAnalysis,
+        startDetection,
+        stopDetection,
     };
 };

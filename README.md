@@ -1,7 +1,7 @@
 
 # ERICA 3.0: Conversational AI with Voice & Vision
 
-ERICA 3.0 is a sophisticated web application showcasing the power of the Google Gemini API. It provides a seamless, real-time conversational experience with a voice assistant and offers powerful video and vision analysis capabilities, all wrapped in a sleek, modern user interface.
+ERICA 3.0 is a sophisticated web application showcasing the power of the Google Gemini API. It provides a seamless, real-time conversational experience with a voice assistant and offers powerful video, vision, research, and chat capabilities, all wrapped in a sleek, modern user interface.
 
 ## ✨ Features
 
@@ -27,14 +27,25 @@ ERICA 3.0 is a sophisticated web application showcasing the power of the Google 
   - **AI-Powered Action Planning**: Using Gemini's function calling, ERICA generates a step-by-step plan to achieve your goal.
   - **Transparent Reasoning**: The generated plan is displayed for you to see, providing a clear look into the AI's thought process. **Note**: For security, ERICA only displays the planned actions and does not execute them on your device.
 
+- **🔍 Research Agent**: Tap into the power of real-time information.
+  - **Live Web Search**: Ask questions about recent events, news, or any topic requiring up-to-date information. ERICA uses Google Search to ground her answers in the latest data from the web.
+  - **Source Attribution**: For transparency, ERICA provides links to the web pages she used to formulate her response, so you can verify the information and explore topics further.
+
+- **🗨️ Multimodal Chat**: Engage in versatile, contextual conversations.
+  - **Text & Image Input**: Go beyond words. Upload an image and ask ERICA to describe it, identify its contents, or answer questions about it.
+  - **Conversation History**: ERICA remembers the context of your chat, allowing for natural back-and-forth dialogue about the topics and images you discuss.
+  - **Streaming Responses**: Get fast, real-time feedback as ERICA types her responses word by word.
+
 ## 🛠️ Tech Stack
 
 - **Frontend**: [React](https://react.dev/) & [TypeScript](https://www.typescriptlang.org/)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
-- **AI Models**:
+- **AI Models & Tools**:
   - [Google Gemini Live API](https://ai.google.dev/docs/live) (`gemini-2.5-flash-native-audio-preview-12-205`) for voice conversations.
-  - [Google Gemini API](https://ai.google.dev/docs/gemini_api_overview) (`gemini-3-pro-preview`) for vision, video analysis, and object detection.
-  - [Google Gemini API](https://ai.google.dev/docs/gemini_api_overview) (`gemini-3-flash-preview`) for memory summarization.
+  - [Google Gemini API](https://ai.google.dev/docs/gemini_api_overview) (`gemini-3-pro-preview`) for vision, video analysis, object detection, and multimodal chat.
+  - [Google Gemini API](https://ai.google.dev/docs/gemini_api_overview) (`gemini-3-flash-preview`) for memory summarization and research queries.
+  - **Function Calling**: Used in Agentic Vision to generate structured action plans.
+  - **Google Search Grounding**: Used in the Research Agent to provide answers based on real-time web data.
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Bundling/Imports**: ES Modules via `esm.sh`
 
@@ -70,10 +81,10 @@ The project is organized into logical directories for better maintainability:
 
 ```
 /
-├── components/         # Reusable React components (Tabs, Transcript, VisionLens, etc.)
-├── hooks/              # Custom React hooks for business logic
+├── components/         # Reusable React components (Tabs, Transcript, VisionLens, ChatAgent, etc.)
+├── hooks/              # Custom React hooks (useLiveSession, useChatAgent, useResearchAgent, etc.)
 ├── memory/             # Logic for long-term memory management
-├── utils/              # Utility functions (e.g., audio encoding/decoding)
+├── utils/              # Utility functions (audioUtils, fileUtils)
 ├── App.tsx             # Main application component with routing/tabs
 ├── index.html          # The main HTML file
 ├── index.tsx           # The entry point of the React application
@@ -100,3 +111,9 @@ The vision features use the multimodal capabilities of the **Gemini API (`gemini
 2.  **Vision Lens**: The `useObjectDetection` hook sends frames to the API with a prompt and a strict JSON schema, asking for object labels, confidence scores, and normalized bounding box coordinates. The `VisionLens` component then renders these as SVG overlays.
 3.  **Video Analysis**: The `useVideoAnalysis` hook extracts a series of frames distributed throughout the uploaded video's duration to create a comprehensive visual summary for the API.
 4.  **Agentic Vision**: The `useAgenticVision` hook uses **function calling**. It sends a single frame, a user command, and a set of predefined tools (`CLICK`, `TYPE`, etc.) to the API. The model returns a structured plan which is then displayed to the user.
+
+### Research & Chat Agents
+
+These features highlight Gemini's versatility in handling different types of data and tools.
+1.  **Research Agent**: This feature uses the **`googleSearch` tool** available in the Gemini API. When a query is submitted, the model is instructed to use Google Search to find relevant, up-to-date information. The API response includes both a synthesized text answer and `groundingChunks` containing the source web URLs, which are then displayed to the user.
+2.  **Multimodal Chat**: The `useChatAgent` hook initializes a persistent chat session using the `ai.chats.create` method. When a user sends a message with an image, the image file is converted to a base64 string and sent as an `inlineData` part alongside the text prompt. The API's response is streamed back and rendered token by token for a responsive feel.

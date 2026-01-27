@@ -5,8 +5,10 @@ import InteractiveView from './components/InteractiveView';
 import VideoAnalysis from './components/VideoAnalysis';
 import AgenticVision from './components/AgenticVision';
 import VisionLens from './components/VisionLens';
+import ResearchAgent from './components/ResearchAgent';
+import ChatAgent from './components/ChatAgent';
 
-export type Tab = 'interactive' | 'lens' | 'video' | 'agentic';
+export type Tab = 'interactive' | 'lens' | 'video' | 'agentic' | 'research' | 'chat';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('interactive');
@@ -23,6 +25,8 @@ const App: React.FC = () => {
         {activeTab === 'lens' && <VisionLens />}
         {activeTab === 'video' && <VideoAnalysis />}
         {activeTab === 'agentic' && <AgenticVision />}
+        {activeTab === 'research' && <ResearchAgent />}
+        {activeTab === 'chat' && <ChatAgent />}
       </main>
     </div>
   );

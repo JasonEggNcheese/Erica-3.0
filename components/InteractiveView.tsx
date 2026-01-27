@@ -129,7 +129,7 @@ const InteractiveView: React.FC = () => {
                             <p>{statusMessage}</p>
                         </div>
                         {analysisError && (
-                            <div className="flex items-center space-x-3 p-2 mb-2 bg-red-900/50 text-red-300 rounded-lg">
+                            <div role="alert" className="flex items-center space-x-3 p-2 mb-2 bg-red-900/50 text-red-300 rounded-lg">
                                 <XCircle className="w-5 h-5 flex-shrink-0" />
                                 <p className="text-sm">{analysisError}</p>
                             </div>
@@ -165,7 +165,7 @@ const InteractiveView: React.FC = () => {
             {/* Footer Controls */}
             <div className="flex-shrink-0 flex flex-col items-center justify-center space-y-3">
                  {sessionError && (
-                    <div className="flex items-center space-x-2 bg-red-500/20 text-red-300 p-3 rounded-lg max-w-md">
+                    <div role="alert" className="flex items-center space-x-2 bg-red-500/20 text-red-300 p-3 rounded-lg max-w-md">
                         <WifiOff className="h-5 w-5 flex-shrink-0" />
                         <p className="text-sm">{sessionError}</p>
                     </div>

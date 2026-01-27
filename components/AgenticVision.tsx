@@ -84,6 +84,42 @@ const AgenticVision: React.FC = () => {
   
   const activeAction = activeActionIndex !== null ? analysis[activeActionIndex] : null;
 
+  const getTooltipContent = (action: AgentAction | null): string => {
+    if (!action) return '';
+    switch (action.action_type) {
+        case 'CLICK': 
+            return 'Clicking...';
+        case 'TYPE': 
+            return `Typing: "${action.text_to_type}"`;
+        case 'SCROLL': 
+            return `Scrolling ${action.scroll_direction}`;
+        case 'WAIT': 
+            return `Waiting ${action.duration}ms`;
+        default: 
+            return '';
+    }
+  };
+
+  const getTooltipStyle = (action: AgentAction | null, rect: DOMRect | null): React.CSSProperties => {
+    if (!action || !rect) return { display: 'none' };
+    
+    if (action.action_type === 'CLICK' && action.x != null && action.y != null) {
+        return {
+            top: `${action.y * rect.height}px`,
+            left: `${action.x * rect.width + 25}px`, // Offset to the right of the click target
+            transform: 'translateY(-50%)',
+            opacity: 1,
+        };
+    }
+    // Default position for other actions
+    return {
+        top: '1rem',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        opacity: 1,
+    };
+  };
+
   return (
     <div className="p-4 md:p-8 h-full flex flex-col gap-6 text-white overflow-y-auto">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
@@ -105,6 +141,7 @@ const AgenticVision: React.FC = () => {
                   width={videoRect.width} 
                   height={videoRect.height}
                   viewBox={`0 0 ${videoRect.width} ${videoRect.height}`}
+                  aria-hidden="true"
                 >
                   <g transform={`translate(${activeAction.x * videoRect.width}, ${activeAction.y * videoRect.height})`}>
                     <circle r="15" fill="rgba(168, 85, 247, 0.5)" stroke="white" strokeWidth="2"></circle>
@@ -112,6 +149,12 @@ const AgenticVision: React.FC = () => {
                   </g>
                 </svg>
               )}
+              <div 
+                  className={`absolute z-10 p-2 text-sm bg-black/70 rounded-md shadow-lg transition-opacity duration-300 pointer-events-none ${activeAction ? 'opacity-100' : 'opacity-0'}`}
+                  style={getTooltipStyle(activeAction, videoRect)}
+              >
+                  {getTooltipContent(activeAction)}
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  <button
@@ -125,7 +168,7 @@ const AgenticVision: React.FC = () => {
                  <button
                     onClick={() => startStream('screen')}
                     disabled={isLoading}
-                    className="flex items-center justify-center space-x-3 w-full px-6 py-3 text-lg font-semibold rounded-full transition-all duration-300 focus:outline-none focus:ring-4 bg-green-600 text-white hover:bg-green-700 focus:ring-green-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center justify-center space-x-3 w-full px-6 py-3 text-lg font-semibold rounded-full transition-all duration-300 focus:outline-none focus:ring-4 bg-green-700 text-white hover:bg-green-800 focus:ring-green-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <ScreenShare className="w-6 h-6" />
                     <span>{streamType === 'screen' ? 'Reshare Screen' : 'Share Screen'}</span>
@@ -168,10 +211,10 @@ const AgenticVision: React.FC = () => {
 
         {/* Right Column: Analysis Result */}
         <div className="flex flex-col gap-4">
-           <h2 className="text-xl font-semibold text-purple-300">3. Action Plan</h2>
-            <div className="flex flex-col h-full p-6 bg-gray-800/50 rounded-lg space-y-4 overflow-y-auto">
+           <h2 id="action-plan-heading" className="text-xl font-semibold text-purple-300">3. Action Plan</h2>
+            <div className="flex flex-col h-full p-6 bg-gray-800/50 rounded-lg overflow-y-auto">
                 {error && (
-                  <div className="flex items-center space-x-3 p-4 mb-4 bg-red-900/50 text-red-300 rounded-lg">
+                  <div role="alert" className="flex items-center space-x-3 p-4 mb-4 bg-red-900/50 text-red-300 rounded-lg">
                     <XCircle className="w-6 h-6 flex-shrink-0" />
                     <p>{error}</p>
                   </div>
@@ -184,29 +227,30 @@ const AgenticVision: React.FC = () => {
                     </div>
                 )}
 
-                {analysis.map((action, index) => (
-                    <div 
-                        key={index} 
-                        className={`bg-gray-900/70 p-4 rounded-lg border transition-all duration-300 ${index === activeActionIndex ? 'border-purple-500 shadow-lg shadow-purple-500/20' : 'border-gray-700'}`}
-                    >
-                        <div className="flex items-start gap-4">
-                            <div className="flex-shrink-0 pt-1">
-                                <ActionIcon action_type={action.action_type} />
+                <ul className="space-y-4" aria-labelledby="action-plan-heading">
+                    {analysis.map((action, index) => (
+                        <li key={index}>
+                            <div className={`bg-gray-900/70 p-4 rounded-lg border transition-all duration-300 ${index === activeActionIndex ? 'border-purple-500 shadow-lg shadow-purple-500/20' : 'border-gray-700'}`}>
+                                <div className="flex items-start gap-4">
+                                    <div className="flex-shrink-0 pt-1">
+                                        <ActionIcon action_type={action.action_type} />
+                                    </div>
+                                    <div className="flex-grow">
+                                        <p className="font-semibold text-lg">{action.action_type}</p>
+                                        {action.action_type === 'CLICK' && <p className="text-sm text-gray-300">Coordinates: ({action.x?.toFixed(2)}, {action.y?.toFixed(2)})</p>}
+                                        {action.action_type === 'TYPE' && <p className="text-sm text-gray-300">Text: "{action.text_to_type}"</p>}
+                                        {action.action_type === 'SCROLL' && <p className="text-sm text-gray-300">Direction: {action.scroll_direction}</p>}
+                                        {action.action_type === 'WAIT' && <p className="text-sm text-gray-300">Duration: {action.duration}ms</p>}
+                                    </div>
+                                </div>
+                                <div className="mt-3 pt-3 border-t border-gray-700/50 flex items-start gap-3 text-sm text-gray-400">
+                                    <Lightbulb className="w-5 h-5 flex-shrink-0 text-yellow-500 mt-0.5" />
+                                    <p className="italic">{action.thought}</p>
+                                </div>
                             </div>
-                            <div className="flex-grow">
-                                <p className="font-semibold text-lg">{action.action_type}</p>
-                                {action.action_type === 'CLICK' && <p className="text-sm text-gray-300">Coordinates: ({action.x?.toFixed(2)}, {action.y?.toFixed(2)})</p>}
-                                {action.action_type === 'TYPE' && <p className="text-sm text-gray-300">Text: "{action.text_to_type}"</p>}
-                                {action.action_type === 'SCROLL' && <p className="text-sm text-gray-300">Direction: {action.scroll_direction}</p>}
-                                {action.action_type === 'WAIT' && <p className="text-sm text-gray-300">Duration: {action.duration}ms</p>}
-                            </div>
-                        </div>
-                        <div className="mt-3 pt-3 border-t border-gray-700/50 flex items-start gap-3 text-sm text-gray-400">
-                            <Lightbulb className="w-5 h-5 flex-shrink-0 text-yellow-500 mt-0.5" />
-                            <p className="italic">{action.thought}</p>
-                        </div>
-                    </div>
-                ))}
+                        </li>
+                    ))}
+                </ul>
             </div>
         </div>
       </div>

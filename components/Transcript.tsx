@@ -14,13 +14,13 @@ const Transcript: React.FC<TranscriptProps> = ({ transcript }) => {
     }, [transcript]);
 
   return (
-    <div className="space-y-6">
+    <ul className="space-y-6">
       {transcript.map((turn, index) => {
         const isUser = turn.speaker === Speaker.USER;
         return (
-          <div key={index} className={`flex items-start gap-4 ${isUser ? 'justify-end' : 'justify-start'}`}>
+          <li key={index} className={`flex items-start gap-4 ${isUser ? 'justify-end' : 'justify-start'}`}>
             {!isUser && (
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center font-bold text-sm">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center font-bold text-sm" aria-hidden="true">
                 E
               </div>
             )}
@@ -31,18 +31,21 @@ const Transcript: React.FC<TranscriptProps> = ({ transcript }) => {
                   : 'bg-gray-700/50 rounded-bl-none'
               } ${!turn.isFinal ? 'opacity-70' : 'opacity-100'}`}
             >
-              <p className="text-white whitespace-pre-wrap">{turn.text}</p>
+              <p className="text-white whitespace-pre-wrap">
+                <span className="sr-only">{isUser ? 'You said: ' : 'ERICA said: '}</span>
+                {turn.text}
+              </p>
             </div>
              {isUser && (
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center font-bold text-sm">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center font-bold text-sm" aria-hidden="true">
                 You
               </div>
             )}
-          </div>
+          </li>
         );
       })}
       <div ref={endOfMessagesRef} />
-    </div>
+    </ul>
   );
 };
 

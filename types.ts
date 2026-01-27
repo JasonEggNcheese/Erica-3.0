@@ -41,3 +41,25 @@ export interface AgentAction {
   duration?: number;
   thought: string;
 }
+
+// Types for Research Agent
+export interface GroundingSource {
+    web?: {
+        uri: string;
+        title: string;
+    }
+}
+
+// Types for Chat Agent
+export interface ChatPart {
+    text?: string;
+    inlineData?: {
+        mimeType: string;
+        data: string; // base64 string
+    };
+}
+
+export interface ChatMessage {
+    role: 'user' | 'model';
+    parts: ChatPart[];
+}

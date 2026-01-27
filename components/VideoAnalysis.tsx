@@ -80,7 +80,7 @@ const VideoAnalysis: React.FC = () => {
               <h2 className="text-xl font-semibold text-purple-300">1. Upload Video</h2>
               {videoSrc ? (
                 <div className="relative aspect-video rounded-lg overflow-hidden border-2 border-gray-700">
-                    <video src={videoSrc} controls className="w-full h-full object-contain bg-black"></video>
+                    <video src={videoSrc} controls className="w-full h-full object-contain bg-black" title={videoFile?.name || "Uploaded video"}></video>
                     <button 
                       onClick={() => setVideoFile(null)} 
                       className="absolute top-2 right-2 bg-black/50 hover:bg-red-600/80 rounded-full p-1.5 transition-colors disabled:opacity-50"
@@ -92,10 +92,19 @@ const VideoAnalysis: React.FC = () => {
                 </div>
               ) : (
                 <div
+                  tabIndex={0}
+                  role="button"
+                  aria-label="Click or drag and drop a video file to upload"
                   onDrop={handleDrop}
                   onDragOver={handleDragOver}
-                  className="relative flex flex-col items-center justify-center p-10 border-2 border-dashed border-gray-600 rounded-lg text-center bg-gray-800/50 cursor-pointer hover:border-purple-500 hover:bg-gray-800 transition-colors"
+                  className="relative flex flex-col items-center justify-center p-10 border-2 border-dashed border-gray-600 rounded-lg text-center bg-gray-800/50 cursor-pointer hover:border-purple-500 hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500"
                   onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          fileInputRef.current?.click();
+                      }
+                  }}
                 >
                   <UploadCloud className="w-12 h-12 text-gray-400 mb-4" />
                   <p className="font-semibold">Click to upload or drag & drop</p>
@@ -106,6 +115,7 @@ const VideoAnalysis: React.FC = () => {
                     onChange={handleFileChange}
                     accept="video/*"
                     className="hidden"
+                    aria-hidden="true"
                   />
                 </div>
               )}
@@ -141,14 +151,22 @@ const VideoAnalysis: React.FC = () => {
               <div className="flex flex-col items-center justify-center h-full p-6 bg-gray-800/50 rounded-lg text-center">
                   <Loader2 className="animate-spin w-8 h-8 text-purple-400 mb-4" />
                   <p className="text-lg mb-4">{progressMessage}</p>
-                  <div className="w-full bg-gray-700 rounded-full h-2.5">
+                  <div
+                    role="progressbar"
+                    aria-valuenow={progress}
+                    // FIX: aria-valuemin and aria-valuemax must be numbers.
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={progressMessage}
+                    className="w-full bg-gray-700 rounded-full h-2.5"
+                  >
                     <div className="bg-purple-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
                   </div>
               </div>
             )}
             
             {error && !isLoading && (
-              <div className="flex items-center space-x-3 p-4 bg-red-900/50 text-red-300 rounded-lg">
+              <div role="alert" className="flex items-center space-x-3 p-4 bg-red-900/50 text-red-300 rounded-lg">
                 <XCircle className="w-6 h-6 flex-shrink-0" />
                 <p>{error}</p>
               </div>

@@ -64,28 +64,34 @@ const VisionLens: React.FC = () => {
 
     const { speak, isSpeaking, selectedVoice, setSelectedVoice } = useTextToSpeech();
     const [isNarrationEnabled, setIsNarrationEnabled] = useState(false);
-    const lastNarratedObjectsRef = useRef<string[]>([]);
+    const lastNarratedObjectsRef = useRef<string>('');
+    const [detectedTextForSR, setDetectedTextForSR] = useState('');
     
     const [videoRect, setVideoRect] = useState<DOMRect | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Create narration sentence from detected objects
+    // Create narration sentence and screen reader text from detected objects
     useEffect(() => {
-        if (!isNarrationEnabled || !isDetecting || isSpeaking || detectedObjects.length === 0) {
-            return;
-        }
-
         const confidentObjects = detectedObjects
             .filter(obj => obj.confidence > CONFIDENCE_THRESHOLD)
             .map(obj => obj.label.toLowerCase());
+
+        const currentLabelsSorted = [...confidentObjects].sort().join(',');
+
+        if (currentLabelsSorted === lastNarratedObjectsRef.current) {
+            return; // Scene hasn't changed meaningfully
+        }
+        lastNarratedObjectsRef.current = currentLabelsSorted;
         
-        if (confidentObjects.length === 0) return;
+        // Update text for screen readers
+        if (confidentObjects.length > 0) {
+            setDetectedTextForSR(`Detected: ${confidentObjects.join(', ')}.`);
+        } else {
+            setDetectedTextForSR('');
+        }
 
-        // Check if the scene has changed to avoid repetitive narration
-        const currentLabels = [...confidentObjects].sort().join(',');
-        const lastLabels = [...lastNarratedObjectsRef.current].sort().join(',');
-
-        if (currentLabels === lastLabels) {
+        // Handle voice narration if enabled
+        if (!isNarrationEnabled || !isDetecting || isSpeaking || confidentObjects.length === 0) {
             return;
         }
 
@@ -100,7 +106,6 @@ const VisionLens: React.FC = () => {
         }
         
         speak(sentence);
-        lastNarratedObjectsRef.current = confidentObjects;
 
     }, [detectedObjects, isNarrationEnabled, isDetecting, isSpeaking, speak]);
     
@@ -108,7 +113,7 @@ const VisionLens: React.FC = () => {
     useEffect(() => {
         if (!isDetecting) {
             setIsNarrationEnabled(false);
-            lastNarratedObjectsRef.current = [];
+            lastNarratedObjectsRef.current = '';
         }
     }, [isDetecting]);
 
@@ -125,6 +130,7 @@ const VisionLens: React.FC = () => {
 
     return (
         <div className="p-4 md:p-8 h-full flex flex-col gap-6 text-white overflow-hidden">
+            <div aria-live="polite" className="sr-only">{detectedTextForSR}</div>
             <div className="flex-grow flex flex-col items-center justify-center gap-6">
                 <div 
                     ref={containerRef}
@@ -143,6 +149,7 @@ const VisionLens: React.FC = () => {
                             width={videoRect.width} 
                             height={videoRect.height}
                             viewBox={`0 0 ${videoRect.width} ${videoRect.height}`}
+                            aria-hidden="true"
                         >
                             {detectedObjects
                                 .filter(obj => obj.confidence > CONFIDENCE_THRESHOLD)
@@ -160,7 +167,7 @@ const VisionLens: React.FC = () => {
                     </div>
 
                      {error && (
-                        <div className="flex items-center space-x-3 p-4 mb-4 bg-red-900/50 text-red-300 rounded-lg">
+                        <div role="alert" className="flex items-center space-x-3 p-4 mb-4 bg-red-900/50 text-red-300 rounded-lg">
                             <XCircle className="w-6 h-6 flex-shrink-0" />
                             <p>{error}</p>
                         </div>
@@ -172,7 +179,7 @@ const VisionLens: React.FC = () => {
                             className={`flex items-center justify-center space-x-3 w-full px-6 py-3 text-lg font-semibold rounded-full transition-all duration-300 focus:outline-none focus:ring-4 ${
                                 isCameraOn 
                                 ? "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500/50" 
-                                : "bg-green-600 text-white hover:bg-green-700 focus:ring-green-500/50"
+                                : "bg-green-700 text-white hover:bg-green-800 focus:ring-green-500/50"
                             }`}
                         >
                             {isCameraOn ? <CameraOff className="w-6 h-6" /> : <Camera className="w-6 h-6" />}
@@ -196,6 +203,7 @@ const VisionLens: React.FC = () => {
                         <button
                             onClick={() => setIsNarrationEnabled(prev => !prev)}
                             disabled={!isDetecting || isSpeaking}
+                            aria-pressed={isNarrationEnabled}
                             className={`flex items-center justify-center space-x-3 flex-grow px-6 py-3 text-lg font-semibold rounded-full transition-all duration-300 focus:outline-none focus:ring-4 ${
                                 isNarrationEnabled
                                 ? "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500/50"

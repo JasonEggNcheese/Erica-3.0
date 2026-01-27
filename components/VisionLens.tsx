@@ -1,7 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useObjectDetection, DetectedObject } from '../hooks/useObjectDetection';
-import { Camera, CameraOff, ScanLine, Square, XCircle, Loader2 } from 'lucide-react';
+import { useTextToSpeech } from '../hooks/useTextToSpeech';
+import VoiceSelector from './VoiceSelector';
+import { Camera, CameraOff, ScanLine, Square, XCircle, Loader2, Volume2, VolumeX } from 'lucide-react';
+
+const CONFIDENCE_THRESHOLD = 0.7;
 
 const BoundingBox: React.FC<{ object: DetectedObject, videoRect: DOMRect | null }> = ({ object, videoRect }) => {
     if (!videoRect) return null;
@@ -58,8 +62,55 @@ const VisionLens: React.FC = () => {
         stopDetection
     } = useObjectDetection();
 
+    const { speak, isSpeaking, selectedVoice, setSelectedVoice } = useTextToSpeech();
+    const [isNarrationEnabled, setIsNarrationEnabled] = useState(false);
+    const lastNarratedObjectsRef = useRef<string[]>([]);
+    
     const [videoRect, setVideoRect] = useState<DOMRect | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+
+    // Create narration sentence from detected objects
+    useEffect(() => {
+        if (!isNarrationEnabled || !isDetecting || isSpeaking || detectedObjects.length === 0) {
+            return;
+        }
+
+        const confidentObjects = detectedObjects
+            .filter(obj => obj.confidence > CONFIDENCE_THRESHOLD)
+            .map(obj => obj.label.toLowerCase());
+        
+        if (confidentObjects.length === 0) return;
+
+        // Check if the scene has changed to avoid repetitive narration
+        const currentLabels = [...confidentObjects].sort().join(',');
+        const lastLabels = [...lastNarratedObjectsRef.current].sort().join(',');
+
+        if (currentLabels === lastLabels) {
+            return;
+        }
+
+        let sentence = '';
+        if (confidentObjects.length === 1) {
+            sentence = `I see a ${confidentObjects[0]}.`;
+        } else if (confidentObjects.length === 2) {
+            sentence = `I see a ${confidentObjects[0]} and a ${confidentObjects[1]}.`;
+        } else {
+            const lastObject = confidentObjects.pop();
+            sentence = `I see ${confidentObjects.join(', ')}, and a ${lastObject}.`;
+        }
+        
+        speak(sentence);
+        lastNarratedObjectsRef.current = confidentObjects;
+
+    }, [detectedObjects, isNarrationEnabled, isDetecting, isSpeaking, speak]);
+    
+    // Stop narration if detection stops
+    useEffect(() => {
+        if (!isDetecting) {
+            setIsNarrationEnabled(false);
+            lastNarratedObjectsRef.current = [];
+        }
+    }, [isDetecting]);
 
     useEffect(() => {
         const updateRect = () => {
@@ -93,8 +144,10 @@ const VisionLens: React.FC = () => {
                             height={videoRect.height}
                             viewBox={`0 0 ${videoRect.width} ${videoRect.height}`}
                         >
-                            {detectedObjects.map((obj, index) => (
-                                <BoundingBox key={index} object={obj} videoRect={videoRect} />
+                            {detectedObjects
+                                .filter(obj => obj.confidence > CONFIDENCE_THRESHOLD)
+                                .map((obj, index) => (
+                                    <BoundingBox key={index} object={obj} videoRect={videoRect} />
                             ))}
                         </svg>
                     )}
@@ -138,6 +191,25 @@ const VisionLens: React.FC = () => {
                             {isDetecting ? <Square className="w-6 h-6" /> : <ScanLine className="w-6 h-6" />}
                             <span>{isDetecting ? 'Stop Detection' : 'Start Detection'}</span>
                         </button>
+                    </div>
+                     <div className="flex items-center gap-4 w-full">
+                        <button
+                            onClick={() => setIsNarrationEnabled(prev => !prev)}
+                            disabled={!isDetecting || isSpeaking}
+                            className={`flex items-center justify-center space-x-3 flex-grow px-6 py-3 text-lg font-semibold rounded-full transition-all duration-300 focus:outline-none focus:ring-4 ${
+                                isNarrationEnabled
+                                ? "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500/50"
+                                : "bg-gray-600 text-white hover:bg-gray-700 focus:ring-gray-500/50"
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                            {isNarrationEnabled ? <Volume2 className="w-6 h-6" /> : <VolumeX className="w-6 h-6" />}
+                            <span>{isNarrationEnabled ? 'Narration On' : 'Narration Off'}</span>
+                        </button>
+                        <VoiceSelector 
+                            selectedVoice={selectedVoice}
+                            onVoiceChange={setSelectedVoice}
+                            disabled={!isDetecting || isSpeaking}
+                        />
                     </div>
                 </div>
             </div>

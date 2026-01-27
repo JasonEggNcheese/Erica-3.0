@@ -2,12 +2,14 @@
 import { useState, useCallback, useRef } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
 import { decode, decodeAudioData } from '../utils/audioUtils';
+import { availableVoices, VoiceId } from '../types';
 
 // This hook is self-contained and manages its own AI instance and audio context
 // to avoid conflicts with the main live session.
 
 export const useTextToSpeech = () => {
     const [isSpeaking, setIsSpeaking] = useState(false);
+    const [selectedVoice, setSelectedVoice] = useState<VoiceId>(availableVoices[0].id);
     const aiRef = useRef<GoogleGenAI | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -29,7 +31,7 @@ export const useTextToSpeech = () => {
                     responseModalities: [Modality.AUDIO],
                     speechConfig: {
                         voiceConfig: {
-                            prebuiltVoiceConfig: { voiceName: 'Kore' }, // A consistent voice for system messages
+                            prebuiltVoiceConfig: { voiceName: selectedVoice },
                         },
                     },
                 },
@@ -61,7 +63,7 @@ export const useTextToSpeech = () => {
             console.error("Text-to-speech failed:", error);
             setIsSpeaking(false);
         }
-    }, [isSpeaking]);
+    }, [isSpeaking, selectedVoice]);
 
-    return { speak, isSpeaking };
+    return { speak, isSpeaking, selectedVoice, setSelectedVoice };
 };

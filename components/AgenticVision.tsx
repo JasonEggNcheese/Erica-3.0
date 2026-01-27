@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAgenticVision } from '../hooks/useAgenticVision';
 import { Camera, ScreenShare, Bot, Square, XCircle, Loader2, MousePointerClick, Type, ArrowDown, ArrowUp, CheckCircle2, Hourglass, Lightbulb } from 'lucide-react';
 import { AgentAction } from '../types';
@@ -28,10 +28,61 @@ const AgenticVision: React.FC = () => {
     executeCommand 
   } = useAgenticVision();
   const [prompt, setPrompt] = useState<string>('');
+  const [activeActionIndex, setActiveActionIndex] = useState<number | null>(null);
+  const [videoRect, setVideoRect] = useState<DOMRect | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<number[]>([]);
+
+  // Effect to clear timeouts on unmount
+  useEffect(() => {
+    return () => {
+      timeoutRef.current.forEach(clearTimeout);
+    };
+  }, []);
+  
+  // Effect to handle resizing of the video element
+  useEffect(() => {
+    const updateRect = () => {
+      if (videoRef.current) {
+        setVideoRect(videoRef.current.getBoundingClientRect());
+      }
+    };
+    updateRect();
+    window.addEventListener('resize', updateRect);
+    return () => window.removeEventListener('resize', updateRect);
+  }, [isStreamOn]);
+
+  // Effect to run the action plan visualization sequence
+  useEffect(() => {
+    timeoutRef.current.forEach(clearTimeout);
+    timeoutRef.current = [];
+    setActiveActionIndex(null);
+
+    if (analysis && analysis.length > 0) {
+      let delay = 500; // Initial delay before starting the sequence
+      analysis.forEach((action, index) => {
+        const actionDuration = action.action_type === 'WAIT' ? (action.duration || 1000) : 2000;
+        
+        const timeoutId = window.setTimeout(() => {
+          setActiveActionIndex(index);
+        }, delay);
+        timeoutRef.current.push(timeoutId);
+
+        delay += actionDuration;
+      });
+      
+      const finalTimeoutId = window.setTimeout(() => {
+        setActiveActionIndex(null);
+      }, delay);
+      timeoutRef.current.push(finalTimeoutId);
+    }
+  }, [analysis]);
 
   const handleExecute = () => {
     executeCommand(prompt);
   };
+  
+  const activeAction = activeActionIndex !== null ? analysis[activeActionIndex] : null;
 
   return (
     <div className="p-4 md:p-8 h-full flex flex-col gap-6 text-white overflow-y-auto">
@@ -40,13 +91,26 @@ const AgenticVision: React.FC = () => {
         <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-4">
             <h2 className="text-xl font-semibold text-purple-300">1. Start Vision Stream</h2>
-            <div className="relative aspect-video rounded-lg overflow-hidden border-2 border-gray-700 bg-black flex items-center justify-center">
+            <div ref={containerRef} className="relative aspect-video rounded-lg overflow-hidden border-2 border-gray-700 bg-black flex items-center justify-center">
               <video ref={videoRef} className="w-full h-full object-contain" muted playsInline />
               {!isStreamOn && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50">
                   <Camera className="w-16 h-16 text-gray-500 mb-4" />
                   <p className="text-gray-400">Vision is off</p>
                 </div>
+              )}
+              {isStreamOn && videoRect && activeAction?.action_type === 'CLICK' && activeAction.x != null && activeAction.y != null && (
+                <svg 
+                  className="absolute top-0 left-0 pointer-events-none" 
+                  width={videoRect.width} 
+                  height={videoRect.height}
+                  viewBox={`0 0 ${videoRect.width} ${videoRect.height}`}
+                >
+                  <g transform={`translate(${activeAction.x * videoRect.width}, ${activeAction.y * videoRect.height})`}>
+                    <circle r="15" fill="rgba(168, 85, 247, 0.5)" stroke="white" strokeWidth="2"></circle>
+                    <circle r="15" fill="transparent" stroke="#a855f7" strokeWidth="2" className="animate-pulse-ring"></circle>
+                  </g>
+                </svg>
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -121,14 +185,17 @@ const AgenticVision: React.FC = () => {
                 )}
 
                 {analysis.map((action, index) => (
-                    <div key={index} className="bg-gray-900/70 p-4 rounded-lg border border-gray-700">
+                    <div 
+                        key={index} 
+                        className={`bg-gray-900/70 p-4 rounded-lg border transition-all duration-300 ${index === activeActionIndex ? 'border-purple-500 shadow-lg shadow-purple-500/20' : 'border-gray-700'}`}
+                    >
                         <div className="flex items-start gap-4">
                             <div className="flex-shrink-0 pt-1">
                                 <ActionIcon action_type={action.action_type} />
                             </div>
                             <div className="flex-grow">
                                 <p className="font-semibold text-lg">{action.action_type}</p>
-                                {action.action_type === 'CLICK' && <p className="text-sm text-gray-300">Coordinates: ({action.x}, {action.y})</p>}
+                                {action.action_type === 'CLICK' && <p className="text-sm text-gray-300">Coordinates: ({action.x?.toFixed(2)}, {action.y?.toFixed(2)})</p>}
                                 {action.action_type === 'TYPE' && <p className="text-sm text-gray-300">Text: "{action.text_to_type}"</p>}
                                 {action.action_type === 'SCROLL' && <p className="text-sm text-gray-300">Direction: {action.scroll_direction}</p>}
                                 {action.action_type === 'WAIT' && <p className="text-sm text-gray-300">Duration: {action.duration}ms</p>}

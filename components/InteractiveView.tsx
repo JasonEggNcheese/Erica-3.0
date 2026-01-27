@@ -1,7 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLiveSession } from '../hooks/useLiveSession';
 import { useLiveAnalysis } from '../hooks/useLiveAnalysis';
+import { useTextToSpeech } from '../hooks/useTextToSpeech';
 import VoiceVisualizer from './VoiceVisualizer';
 import Transcript from './Transcript';
 import VoiceSelector from './VoiceSelector';
@@ -16,7 +17,6 @@ const InteractiveView: React.FC = () => {
         stopSession,
         clearTranscript,
         isSpeaking,
-        isSpeakingError,
         errorMessage: sessionError,
         selectedVoice,
         setSelectedVoice
@@ -35,8 +35,27 @@ const InteractiveView: React.FC = () => {
         stopAnalysis
     } = useLiveAnalysis();
 
+    const { speak: speakError, isSpeaking: isSpeakingError } = useTextToSpeech();
+    const lastSpokenErrorRef = useRef<string | null>(null);
     const [isInteractiveActive, setIsInteractiveActive] = useState(false);
     const [analysisPrompt, setAnalysisPrompt] = useState('Describe what you see in detail.');
+
+    // Effect to speak errors from either session or analysis hooks
+    useEffect(() => {
+        const currentError = sessionError || analysisError;
+        if (currentError && currentError !== lastSpokenErrorRef.current) {
+            let funnyMessage = '';
+            if (sessionError) {
+                funnyMessage = "Oh dear, my connection to the mothership seems a bit fuzzy. Please try again.";
+            } else if (analysisError) {
+                funnyMessage = "Whoops, my digital eye just blinked. Could you give that another try?";
+            }
+            speakError(funnyMessage);
+            lastSpokenErrorRef.current = currentError;
+        } else if (!sessionError && !analysisError) {
+            lastSpokenErrorRef.current = null;
+        }
+    }, [sessionError, analysisError, speakError]);
 
     const handleStart = async () => {
         setIsInteractiveActive(true);

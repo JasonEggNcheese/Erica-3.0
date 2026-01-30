@@ -1,7 +1,6 @@
-
 # ERICA 3.0: Conversational AI with Voice & Vision
 
-ERICA 3.0 is a sophisticated web application showcasing the power of the Google Gemini API. It provides a seamless, real-time conversational experience with a voice assistant and offers powerful video, vision, research, and chat capabilities, all wrapped in a sleek, modern user interface.
+ERICA 3.0 is a sophisticated web application showcasing the power of the Google Gemini API. It provides a seamless, real-time conversational experience with a voice assistant and offers powerful video, vision, research, and chat capabilities, all wrapped in a sleek, modern user interface. This project is fully containerized with Docker for easy deployment and scalability.
 
 ## ✨ Features
 
@@ -40,6 +39,9 @@ ERICA 3.0 is a sophisticated web application showcasing the power of the Google 
 
 - **Frontend**: [React](https://react.dev/) & [TypeScript](https://www.typescriptlang.org/)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+- **Containerization**: [Docker](https://www.docker.com/)
+- **Web Server**: [Express.js](https://expressjs.com/)
+- **Build Tool**: [Vite](https://vitejs.dev/)
 - **AI Models & Tools**:
   - [Google Gemini Live API](https://ai.google.dev/docs/live) (`gemini-2.5-flash-native-audio-preview-12-205`) for voice conversations.
   - [Google Gemini API](https://ai.google.dev/docs/gemini_api_overview) (`gemini-3-pro-preview`) for vision, video analysis, object detection, and multimodal chat.
@@ -47,33 +49,38 @@ ERICA 3.0 is a sophisticated web application showcasing the power of the Google 
   - **Function Calling**: Used in Agentic Vision to generate structured action plans.
   - **Google Search Grounding**: Used in the Research Agent to provide answers based on real-time web data.
 - **Icons**: [Lucide React](https://lucide.dev/)
-- **Bundling/Imports**: ES Modules via `esm.sh`
 
 ## 🚀 Getting Started
 
-Follow these instructions to get a copy of the project up and running on your local machine.
+Follow these instructions to get the project running in a Docker container on your local machine.
 
 ### Prerequisites
 
-You need to have a modern web browser and a working microphone and camera.
+You need to have [Docker](https://www.docker.com/get-started) installed and running on your system. You will also need a modern web browser and a working microphone and camera.
 
 ### Configuration
 
-This application requires a Google Gemini API key to function.
+This application requires a Google Gemini API key to function. You must provide this key as an environment variable when running the Docker container. **Do not hardcode your API key in any source files.**
 
-The API key is expected to be available as an environment variable named `process.env.API_KEY`. The application is set up to use this variable directly. **Do not hardcode your API key in the source files.**
+### Running with Docker
 
-### Running the Application
-
-1.  **Serve the Files**: You can use any simple HTTP server to run this project. If you have Node.js, you can use `serve`:
+1.  **Build the Docker Image**:
+    Open a terminal in the project's root directory (where the `Dockerfile` is located) and run the following command:
     ```bash
-    # Install serve globally
-    npm install -g serve
-
-    # Serve the project directory
-    serve .
+    docker build -t erica-3.0 .
     ```
-2.  **Open in Browser**: Open your web browser and navigate to the local server address provided (e.g., `http://localhost:3000`).
+
+2.  **Run the Docker Container**:
+    After the image is built, run it with the following command. Remember to replace `"YOUR_API_KEY_HERE"` with your actual Google Gemini API key.
+    ```bash
+    docker run -p 8080:8080 -e API_KEY="YOUR_API_KEY_HERE" --name erica-app erica-3.0
+    ```
+    - `-p 8080:8080`: Maps port 8080 on your local machine to port 8080 inside the container.
+    - `-e API_KEY="..."`: Securely passes your API key as an environment variable to the container.
+    - `--name erica-app`: Gives your running container a memorable name.
+
+3.  **Open in Browser**:
+    Open your web browser and navigate to `http://localhost:8080`. The ERICA 3.0 application should now be running.
 
 ## 📁 File Structure
 
@@ -81,39 +88,16 @@ The project is organized into logical directories for better maintainability:
 
 ```
 /
-├── components/         # Reusable React components (Tabs, Transcript, VisionLens, ChatAgent, etc.)
-├── hooks/              # Custom React hooks (useLiveSession, useChatAgent, useResearchAgent, etc.)
+├── components/         # Reusable React components
+├── hooks/              # Custom React hooks
 ├── memory/             # Logic for long-term memory management
-├── utils/              # Utility functions (audioUtils, fileUtils)
-├── App.tsx             # Main application component with routing/tabs
-├── index.html          # The main HTML file
+├── utils/              # Utility functions
+├── App.tsx             # Main application component
+├── index.html          # The main HTML file (template)
 ├── index.tsx           # The entry point of the React application
-├── types.ts            # TypeScript type definitions
-├── metadata.json       # Application metadata
+├── server.js           # Express server for production
+├── Dockerfile          # Instructions for building the Docker image
+├── package.json        # Project dependencies and scripts
+├── vite.config.ts      # Vite build configuration
 └── README.md           # You are here!
 ```
-
-## 🧠 How It Works
-
-### Interactive Mode & Memory
-
-The voice feature is powered by the **Gemini Live API**.
-1.  The `useLiveSession` hook manages the voice connection, while `useLiveAnalysis` handles the vision stream.
-2.  The `InteractiveView` component combines these hooks for a simultaneous voice and vision experience.
-3.  On session start, `memoryManager` retrieves a summary of past conversations from `localStorage` to provide context.
-4.  The **Web Audio API** captures microphone input for the voice stream.
-5.  After a conversational turn, `memoryManager` triggers a background process to update the long-term memory summary.
-
-### Vision Features (Lens, Video, Agentic)
-
-The vision features use the multimodal capabilities of the **Gemini API (`gemini-3-pro-preview`)**.
-1.  **Frame Capture**: For all vision tasks, a frame is captured from the relevant source (live camera, screen share, or uploaded video file) and converted to a base64-encoded JPEG.
-2.  **Vision Lens**: The `useObjectDetection` hook sends frames to the API with a prompt and a strict JSON schema, asking for object labels, confidence scores, and normalized bounding box coordinates. The `VisionLens` component then renders these as SVG overlays.
-3.  **Video Analysis**: The `useVideoAnalysis` hook extracts a series of frames distributed throughout the uploaded video's duration to create a comprehensive visual summary for the API.
-4.  **Agentic Vision**: The `useAgenticVision` hook uses **function calling**. It sends a single frame, a user command, and a set of predefined tools (`CLICK`, `TYPE`, etc.) to the API. The model returns a structured plan which is then displayed to the user.
-
-### Research & Chat Agents
-
-These features highlight Gemini's versatility in handling different types of data and tools.
-1.  **Research Agent**: This feature uses the **`googleSearch` tool** available in the Gemini API. When a query is submitted, the model is instructed to use Google Search to find relevant, up-to-date information. The API response includes both a synthesized text answer and `groundingChunks` containing the source web URLs, which are then displayed to the user.
-2.  **Multimodal Chat**: The `useChatAgent` hook initializes a persistent chat session using the `ai.chats.create` method. When a user sends a message with an image, the image file is converted to a base64 string and sent as an `inlineData` part alongside the text prompt. The API's response is streamed back and rendered token by token for a responsive feel.

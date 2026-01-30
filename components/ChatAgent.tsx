@@ -127,7 +127,7 @@ const ChatAgent: React.FC = () => {
                     <p className="text-xl font-semibold">Drop image here</p>
                 </div>
             )}
-            <div className="flex-grow overflow-y-auto space-y-6 p-2 pr-4 scrollbar-thin">
+            <div className="flex-grow min-h-0 overflow-y-auto space-y-6 p-2 pr-4 scrollbar-thin">
                 {messages.map((msg, index) => <ChatMessageView key={index} message={msg} />)}
                 {isLoading && messages[messages.length-1].role === 'model' && (
                     <div className="flex items-start gap-4 justify-start">

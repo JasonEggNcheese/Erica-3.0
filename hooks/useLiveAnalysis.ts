@@ -1,19 +1,24 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
+import { Gesture, DetectedObject } from '../types';
 
 const ANALYSIS_INTERVAL = 3000; // milliseconds
 
-export const useLiveAnalysis = () => {
+interface UseLiveAnalysisProps {
+    onGestureDetected: (gesture: Gesture) => void;
+}
+
+export const useLiveAnalysis = ({ onGestureDetected }: UseLiveAnalysisProps) => {
     const [isCameraOn, setIsCameraOn] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysis, setAnalysis] = useState('');
+    const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [statusMessage, setStatusMessage] = useState('Camera is off.');
 
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
-    // FIX: Replaced 'NodeJS.Timeout' with 'number' for browser compatibility.
     const analysisIntervalRef = useRef<number | null>(null);
     const aiRef = useRef<GoogleGenAI | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -45,6 +50,16 @@ export const useLiveAnalysis = () => {
             setStatusMessage('Camera access failed.');
         }
     }, []);
+    
+    const stopAnalysis = useCallback(() => {
+        if (analysisIntervalRef.current) {
+            window.clearInterval(analysisIntervalRef.current);
+            analysisIntervalRef.current = null;
+        }
+        setIsAnalyzing(false);
+        setStatusMessage('Analysis stopped.');
+    }, []);
+
 
     const stopCamera = useCallback(() => {
         if(isAnalyzing) stopAnalysis();
@@ -55,8 +70,10 @@ export const useLiveAnalysis = () => {
             videoRef.current.srcObject = null;
         }
         setIsCameraOn(false);
+        setDetectedObjects([]);
+        setAnalysis('');
         setStatusMessage('Camera is off.');
-    }, [isAnalyzing]);
+    }, [isAnalyzing, stopAnalysis]);
     
     const analyzeFrame = useCallback(async (prompt: string) => {
         if (isProcessingFrame.current || !videoRef.current || videoRef.current.readyState < 2) {
@@ -92,22 +109,75 @@ export const useLiveAnalysis = () => {
                 inlineData: { mimeType: 'image/jpeg', data: frameData },
             };
 
+            const visionSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    description: {
+                        type: Type.STRING,
+                        description: "A brief, one-sentence description of the overall scene, related to the user's prompt."
+                    },
+                    objects: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                label: { type: Type.STRING },
+                                confidence: { type: Type.NUMBER },
+                                box: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        x1: { type: Type.NUMBER }, y1: { type: Type.NUMBER },
+                                        x2: { type: Type.NUMBER }, y2: { type: Type.NUMBER },
+                                    },
+                                    required: ['x1', 'y1', 'x2', 'y2']
+                                }
+                            },
+                            required: ['label', 'confidence', 'box']
+                        }
+                    },
+                    gesture: {
+                        type: Type.OBJECT,
+                        properties: {
+                            gesture: {
+                                type: Type.STRING,
+                                enum: ['WAVING', 'COUNTING_FINGERS', 'THUMBS_UP', 'SIGN_LANGUAGE', 'NONE'],
+                            },
+                            count: { type: Type.NUMBER },
+                            sign: { type: Type.STRING }
+                        },
+                        required: ['gesture']
+                    }
+                }
+            };
+            
+            const fullPrompt = `Analyze the scene based on the user's request: "${prompt}". In your analysis, ALWAYS provide a brief overall description of the scene. ALSO, identify all significant objects with labels, confidence scores (0 to 1), and normalized bounding boxes. AND ALSO detect if the user is making a gesture like WAVING, THUMBS_UP, COUNTING_FINGERS, or signing an ASL letter. Respond with a JSON object matching the required schema. If nothing is detected, provide a default description.`;
+
             const response = await aiRef.current.models.generateContent({
                 model: 'gemini-3-pro-preview',
-                contents: { parts: [{ text: prompt }, imagePart] },
+                contents: { parts: [{ text: fullPrompt }, imagePart] },
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: visionSchema,
+                }
             });
+            
+            const responseJson = JSON.parse(response.text ?? '{}');
+            
+            setAnalysis(responseJson.description || "Awaiting analysis...");
+            setDetectedObjects(responseJson.objects || []);
 
-            setAnalysis(response.text ?? 'No response from AI.');
+            if (responseJson.gesture && responseJson.gesture.gesture && responseJson.gesture.gesture !== 'NONE') {
+                onGestureDetected(responseJson.gesture as Gesture);
+            }
 
         } catch (err) {
             console.error("Frame analysis error:", err);
-            setError(err instanceof Error ? err.message : "An unknown error occurred during analysis.");
-            // Stop analysis on error to avoid repeated failures
-            stopAnalysis();
+            // Don't halt analysis on minor frame errors, but log them.
+            // setError(err instanceof Error ? err.message : "An unknown error occurred during analysis.");
         } finally {
             isProcessingFrame.current = false;
         }
-    }, []);
+    }, [onGestureDetected]);
 
 
     const startAnalysis = useCallback((prompt: string) => {
@@ -119,26 +189,16 @@ export const useLiveAnalysis = () => {
         setIsAnalyzing(true);
         setStatusMessage('Live analysis in progress...');
         setAnalysis('Starting analysis...');
+        setDetectedObjects([]);
         
-        // Initial call
         analyzeFrame(prompt);
         
-        // Subsequent calls on interval
-        // FIX: Use window.setInterval and cast to number to ensure browser compatibility.
         analysisIntervalRef.current = window.setInterval(() => {
             analyzeFrame(prompt);
-        }, ANALYSIS_INTERVAL) as unknown as number;
+        }, ANALYSIS_INTERVAL);
 
     }, [analyzeFrame]);
 
-    const stopAnalysis = useCallback(() => {
-        if (analysisIntervalRef.current) {
-            window.clearInterval(analysisIntervalRef.current);
-            analysisIntervalRef.current = null;
-        }
-        setIsAnalyzing(false);
-        setStatusMessage('Analysis stopped.');
-    }, []);
 
     useEffect(() => {
         return () => {
@@ -156,6 +216,7 @@ export const useLiveAnalysis = () => {
         isCameraOn,
         isAnalyzing,
         analysis,
+        detectedObjects,
         error,
         statusMessage,
         startCamera,

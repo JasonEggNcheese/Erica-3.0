@@ -78,7 +78,8 @@ export const useChatAgent = () => {
         setMessages(prev => [...prev, modelMessage]);
 
         try {
-            // FIX: The `message` property should directly be the array of parts for multimodal input.
+            // For multimodal chat, the sendMessageStream method expects an object
+            // with a `message` property containing the array of parts.
             const result = await chatRef.current.sendMessageStream({ message: userParts });
 
             for await (const chunk of result) {
@@ -86,13 +87,24 @@ export const useChatAgent = () => {
                 const chunkText = response.text;
                 if (chunkText) {
                     setMessages(prev => {
-                        const lastMessage = prev[prev.length - 1];
-                        if (lastMessage.role === 'model') {
-                            const updatedText = (lastMessage.parts[0]?.text || '') + chunkText;
-                            lastMessage.parts[0] = { text: updatedText };
-                            return [...prev.slice(0, -1), lastMessage];
+                        const newMessages = [...prev];
+                        const lastMessage = newMessages[newMessages.length - 1];
+
+                        if (lastMessage && lastMessage.role === 'model') {
+                            // Create a deep copy of the message to update it immutably.
+                            const updatedLastMessage = {
+                                ...lastMessage,
+                                parts: [
+                                    {
+                                        ...lastMessage.parts[0],
+                                        text: (lastMessage.parts[0]?.text || '') + chunkText,
+                                    },
+                                ],
+                            };
+                            newMessages[newMessages.length - 1] = updatedLastMessage;
+                            return newMessages;
                         }
-                        return prev; // Should not happen
+                        return prev;
                     });
                 }
             }

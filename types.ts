@@ -15,7 +15,7 @@ export enum Speaker {
 export interface ConversationTurn {
     speaker: Speaker;
     text: string;
-    isFinal: boolean;
+    isFinal?: boolean;
 }
 
 export const availableVoices = [
@@ -62,4 +62,25 @@ export interface ChatPart {
 export interface ChatMessage {
     role: 'user' | 'model';
     parts: ChatPart[];
+}
+
+// Types for Gesture Recognition
+export type GestureType = 'WAVING' | 'COUNTING_FINGERS' | 'THUMBS_UP' | 'SIGN_LANGUAGE';
+
+export interface Gesture {
+  gesture: GestureType;
+  count?: number;
+  sign?: string;
+}
+
+// Types for Object Detection
+export interface DetectedObject {
+    label: string;
+    confidence: number;
+    box: {
+        x1: number;
+        y1: number;
+        x2: number;
+        y2: number;
+    };
 }

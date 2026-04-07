@@ -29,6 +29,25 @@ export const availableVoices = [
 export type VoiceId = typeof availableVoices[number]['id'];
 
 
+// Types for LLM Models
+export type LLMProvider = 'google' | 'anthropic' | 'openai';
+
+export interface LLMModel {
+    id: string;
+    name: string;
+    provider: LLMProvider;
+    description: string;
+}
+
+export const availableModels: LLMModel[] = [
+    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', provider: 'google', description: 'Google\'s most capable model' },
+    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', provider: 'google', description: 'Fast and efficient' },
+    { id: 'claude-3-5-sonnet-20240620', name: 'Claude 3.5 Sonnet', provider: 'anthropic', description: 'Anthropic\'s best balanced model' },
+    { id: 'gpt-4o', name: 'GPT-4o', provider: 'openai', description: 'OpenAI\'s flagship multimodal model' },
+];
+
+export type ModelId = typeof availableModels[number]['id'];
+
 // Types for Agentic Vision
 export type ActionType = 'TYPE' | 'CLICK' | 'SCROLL' | 'WAIT' | 'FINISH';
 

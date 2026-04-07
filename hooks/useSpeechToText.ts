@@ -1,5 +1,6 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { logError, getFriendlyErrorMessage, ErrorSeverity } from '../utils/errorLogger';
 
 interface SpeechToTextOptions {
   onFinalTranscript: (transcript: string) => void;
@@ -51,7 +52,7 @@ export const useSpeechToText = ({ onFinalTranscript, onInterimTranscript }: Spee
     };
 
     recognition.onerror = (event: any) => {
-      console.error("Speech recognition error", event.error);
+      logError(event.error, ErrorSeverity.MEDIUM, { hook: 'useSpeechToText', action: 'recognition.onerror' });
       setError(`Speech recognition error: ${event.error}`);
       setIsListening(false);
     };
@@ -72,8 +73,8 @@ export const useSpeechToText = ({ onFinalTranscript, onInterimTranscript }: Spee
         setIsListening(true);
         setError(null);
       } catch (e) {
-        console.error("Could not start listening:", e);
-        setError(e instanceof Error ? e.message : "An unknown error occurred.");
+        logError(e, ErrorSeverity.MEDIUM, { hook: 'useSpeechToText', action: 'startListening' });
+        setError(getFriendlyErrorMessage(e));
       }
     }
   }, [isListening]);

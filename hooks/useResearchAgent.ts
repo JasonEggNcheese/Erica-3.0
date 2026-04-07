@@ -2,6 +2,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { GroundingSource } from '../types';
+import { logError, getFriendlyErrorMessage, ErrorSeverity } from '../utils/errorLogger';
 
 export const useResearchAgent = () => {
     const [query, setQuery] = useState<string>('');
@@ -24,14 +25,15 @@ export const useResearchAgent = () => {
 
         try {
             if (!aiRef.current) {
-                if (!process.env.API_KEY) throw new Error("API key not found.");
-                aiRef.current = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                if (!process.env.GEMINI_API_KEY) throw new Error("API key not found.");
+                aiRef.current = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
             }
 
             const response = await aiRef.current.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: currentQuery,
+                model: 'gemini-3.1-pro-preview',
+                contents: [{ parts: [{ text: currentQuery }] }],
                 config: {
+                    systemInstruction: "You are a professional research assistant. Use the provided search tools to find accurate, up-to-date information. Synthesize the results into a clear, structured report with citations where appropriate.",
                     tools: [{ googleSearch: {} }],
                 },
             });
@@ -44,9 +46,8 @@ export const useResearchAgent = () => {
             }
 
         } catch (err) {
-            console.error("Research query failed:", err);
-            const message = err instanceof Error ? err.message : "An unknown error occurred.";
-            setError(`Failed to get response. ${message}`);
+            logError(err, ErrorSeverity.HIGH, { hook: 'useResearchAgent', action: 'runQuery', query: currentQuery });
+            setError(getFriendlyErrorMessage(err));
         } finally {
             setIsLoading(false);
         }

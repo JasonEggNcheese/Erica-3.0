@@ -1,6 +1,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { GoogleGenAI } from '@google/genai';
+import { logError, getFriendlyErrorMessage, ErrorSeverity } from '../utils/errorLogger';
 
 export const useVideoAnalysis = () => {
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -92,8 +93,8 @@ export const useVideoAnalysis = () => {
 
     try {
       if (!aiRef.current) {
-        if (!process.env.API_KEY) throw new Error("API key not found.");
-        aiRef.current = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        if (!process.env.GEMINI_API_KEY) throw new Error("API key not found.");
+        aiRef.current = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       }
 
       const frames = await extractFrames(videoFile);
@@ -118,10 +119,10 @@ export const useVideoAnalysis = () => {
 
     } catch (err) {
       if (isCancelledRef.current) return;
-      console.error("Video analysis failed:", err);
+      logError(err, ErrorSeverity.HIGH, { hook: 'useVideoAnalysis', action: 'analyzeVideo', prompt });
       const message = err instanceof Error ? err.message : "An unknown error occurred.";
       if (message !== 'Analysis cancelled') {
-        setError(`Failed to analyze video. ${message}`);
+        setError(getFriendlyErrorMessage(err));
       }
     } finally {
       if (!isCancelledRef.current) {

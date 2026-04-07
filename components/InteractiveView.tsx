@@ -1,5 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import Markdown from 'react-markdown';
 import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
 import { useLiveAnalysis } from '../hooks/useLiveAnalysis';
 import { useTextToSpeech } from '../hooks/useTextToSpeech';
@@ -7,10 +9,12 @@ import { useSpeechToText } from '../hooks/useSpeechToText';
 import VoiceVisualizer, { VisualizerStatus } from './VoiceVisualizer';
 import Transcript from './Transcript';
 import VoiceSelector from './VoiceSelector';
+import ModelSelector from './ModelSelector';
 import NewConversationButton from './NewConversationButton';
-import { Speaker, DetectedObject, ConversationTurn, VoiceId } from '../types';
-import { Mic, Square, Zap, CameraOff, Loader2, XCircle, WifiOff, Info } from 'lucide-react';
+import { Speaker, DetectedObject, ConversationTurn, VoiceId, ModelId, availableModels } from '../types';
+import { Mic, Square, Zap, CameraOff, Loader2, XCircle, WifiOff, Info, Activity, Send, Paperclip, Globe, Search, Monitor, Video } from 'lucide-react';
 import { getMemory, processNewTurn } from '../memory/memoryManager';
+import { logError, getFriendlyErrorMessage, ErrorSeverity } from '../utils/errorLogger';
 
 const BoundingBox: React.FC<{ object: DetectedObject, videoRect: DOMRect | null }> = ({ object, videoRect }) => {
     if (!videoRect || object.confidence < 0.6) return null;
@@ -28,24 +32,43 @@ const BoundingBox: React.FC<{ object: DetectedObject, videoRect: DOMRect | null 
     const color = `hsl(${hash % 360}, 90%, 70%)`;
 
     return (
-        <>
-            <rect x={x} y={y} width={width} height={height} stroke={color} fill={`${color}33`} strokeWidth="2" />
-            <text x={x + 5} y={y > 20 ? y - 5 : y + 18} fill="white" fontSize="14" fontWeight="bold" style={{ textShadow: '1px 1px 2px black', paintOrder: 'stroke', stroke: 'black', strokeWidth: '2px' }}>
-                {`${object.label} (${(object.confidence * 100).toFixed(0)}%)`}
+        <motion.g
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+        >
+            <rect x={x} y={y} width={width} height={height} stroke={color} fill={`${color}11`} strokeWidth="1" className="backdrop-blur-[1px]" />
+            <rect x={x} y={y - 20} width={object.label.length * 8 + 40} height={20} fill={color} />
+            <text x={x + 5} y={y - 5} fill="black" fontSize="10" fontWeight="bold" className="uppercase tracking-tighter">
+                {`${object.label} ${(object.confidence * 100).toFixed(0)}%`}
             </text>
-        </>
+        </motion.g>
     );
 };
 
-const InteractiveView: React.FC = () => {
+interface InteractiveViewProps {
+    initialMessage?: string | null;
+}
+
+const InteractiveView: React.FC<InteractiveViewProps> = ({ initialMessage }) => {
     const [status, setStatus] = useState<VisualizerStatus>('IDLE');
     const [transcript, setTranscript] = useState<ConversationTurn[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [selectedVoice, setSelectedVoice] = useState<VoiceId>('Kore');
+    const [selectedModel, setSelectedModel] = useState<ModelId>('gemini-1.5-flash');
+    const [inputText, setInputText] = useState('');
+    const [isScreenSharing, setIsScreenSharing] = useState(false);
+    const [attachedFile, setAttachedFile] = useState<{ data: string, mimeType: string } | null>(null);
     
     const aiRef = useRef<GoogleGenAI | null>(null);
     const conversationHistoryRef = useRef<ConversationTurn[]>([]);
     const memoryRef = useRef<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (initialMessage) {
+            setTranscript(prev => [...prev, { speaker: Speaker.ERICA, text: initialMessage, isFinal: true }]);
+        }
+    }, [initialMessage]);
 
     useEffect(() => {
         conversationHistoryRef.current = transcript;
@@ -53,12 +76,11 @@ const InteractiveView: React.FC = () => {
 
     const { 
         videoRef, isCameraOn, isAnalyzing, analysis, detectedObjects,
-        error: analysisError, statusMessage, startCamera, stopCamera, startAnalysis, stopAnalysis
+        error: analysisError, statusMessage, startCamera, stopCamera, startAnalysis, stopAnalysis, setIsCameraOn
     } = useLiveAnalysis({ onGestureDetected: () => {} });
 
     const { speak, isSpeaking } = useTextToSpeech();
     
-    // FIX: Moved captureFrame before handleAiResponse to fix "used before its declaration" error.
     const captureFrame = useCallback(async (): Promise<string> => {
         if (!videoRef.current || videoRef.current.readyState < 2) return '';
         const canvas = document.createElement('canvas');
@@ -70,68 +92,107 @@ const InteractiveView: React.FC = () => {
         return canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
     }, []);
 
-    const handleAiResponse = useCallback(async (userText: string) => {
-        if (!userText) return;
+    const handleAiResponse = useCallback(async (userText: string, fileData?: { data: string, mimeType: string }) => {
+        if (!userText && !fileData) return;
 
-        const newUserTurn: ConversationTurn = { speaker: Speaker.USER, text: userText, isFinal: true };
+        const newUserTurn: ConversationTurn = { speaker: Speaker.USER, text: userText || (fileData ? "[Attached File]" : ""), isFinal: true };
         setTranscript(prev => [...prev, newUserTurn]);
         setStatus('PROCESSING');
         setError(null);
+        setInputText('');
+        setAttachedFile(null);
 
         try {
             if (!aiRef.current) {
-                if (!process.env.API_KEY) throw new Error("API key not found.");
-                aiRef.current = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                if (!process.env.GEMINI_API_KEY) throw new Error("API key not found.");
+                aiRef.current = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
             }
 
             const history = conversationHistoryRef.current.map(turn => `${turn.speaker}: ${turn.text}`).join('\n');
-            const visualContext = `Current scene: ${analysis}\nObjects detected: ${detectedObjects.map(o => o.label).join(', ')}`;
+            const visualContext = isCameraOn ? `Current scene: ${analysis}\nObjects detected: ${detectedObjects.map(o => o.label).join(', ')}` : "Camera is off.";
 
             const memoryContext = memoryRef.current 
-                ? `\n---
-LONG-TERM MEMORY (Key facts about the user from past conversations):
-${memoryRef.current}
----` 
+                ? `\n---\nLONG-TERM MEMORY:\n${memoryRef.current}\n---` 
                 : '';
 
-            const fullPrompt = `You are ERICA, a conversational AI. You are seeing a live video feed. Use the following visual context, conversation history, and long-term memory to provide a friendly, conversational response to the user's latest message. Keep your responses concise.${memoryContext}
-
-            ---
-            VISUAL CONTEXT:
-            ${visualContext}
-            ---
-            CONVERSATION HISTORY (recent turns):
-            ${history}
-            ---
-            USER: ${userText}
-            ERICA:`;
-
-            const imagePart = { inlineData: { mimeType: 'image/jpeg', data: await captureFrame() } };
-
-            const responseStream = await aiRef.current.models.generateContentStream({
-                model: 'gemini-3-pro-preview',
-                contents: { parts: [{ text: fullPrompt }, imagePart] },
-            });
+            const systemInstruction = `You are ERICA, an advanced multimodal AI assistant. You have access to a live video feed, web search, and file analysis tools. 
+            Provide friendly, concise, and helpful responses. Ground your answers in real-time information when necessary.
+            ${memoryContext}
             
-            let fullResponseText = '';
-            let ericaTurnAdded = false;
+            VISUAL CONTEXT:
+            ${visualContext}`;
 
-            for await (const chunk of responseStream) {
-                 const response = chunk as GenerateContentResponse;
-                const chunkText = response.text;
-                if (chunkText) {
-                    fullResponseText += chunkText;
-                    if (!ericaTurnAdded) {
-                        setTranscript(prev => [...prev, { speaker: Speaker.ERICA, text: fullResponseText, isFinal: false }]);
-                        ericaTurnAdded = true;
-                    } else {
-                        setTranscript(prev => {
-                            const newTranscript = [...prev];
-                            newTranscript[newTranscript.length - 1].text = fullResponseText;
-                            return newTranscript;
-                        });
+            const currentModel = availableModels.find(m => m.id === selectedModel);
+            let fullResponseText = '';
+
+            if (currentModel?.provider === 'google') {
+                const parts: any[] = [{ text: userText || "Analyze this." }];
+                
+                // Add live frame if camera is on
+                if (isCameraOn) {
+                    const frameData = await captureFrame();
+                    if (frameData) {
+                        parts.push({ inlineData: { mimeType: 'image/jpeg', data: frameData } });
                     }
                 }
+
+                // Add attached file if present
+                if (fileData) {
+                    parts.push({ inlineData: { mimeType: fileData.mimeType, data: fileData.data } });
+                }
+
+                const responseStream = await aiRef.current.models.generateContentStream({
+                    model: selectedModel,
+                    contents: { parts },
+                    config: {
+                        systemInstruction,
+                        tools: [{ googleSearch: {} }]
+                    }
+                });
+                
+                let ericaTurnAdded = false;
+
+                for await (const chunk of responseStream) {
+                    const response = chunk as GenerateContentResponse;
+                    const chunkText = response.text;
+                    if (chunkText) {
+                        fullResponseText += chunkText;
+                        if (!ericaTurnAdded) {
+                            setTranscript(prev => [...prev, { speaker: Speaker.ERICA, text: fullResponseText, isFinal: false }]);
+                            ericaTurnAdded = true;
+                        } else {
+                            setTranscript(prev => {
+                                const newTranscript = [...prev];
+                                newTranscript[newTranscript.length - 1].text = fullResponseText;
+                                return newTranscript;
+                            });
+                        }
+                    }
+                }
+            } else {
+                // Use backend API for other providers
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: selectedModel,
+                        provider: currentModel?.provider,
+                        systemInstruction,
+                        messages: conversationHistoryRef.current.map(turn => ({
+                            role: turn.speaker === Speaker.ERICA ? 'model' : 'user',
+                            parts: [{ text: turn.text }]
+                        })).concat([{ role: 'user', parts: [{ text: userText || "Analyze this." }] }])
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to get response from AI');
+                }
+
+                const data = await response.json();
+                fullResponseText = data.text;
+                setTranscript(prev => [...prev, { speaker: Speaker.ERICA, text: fullResponseText, isFinal: true }]);
             }
             
              setTranscript(prev => {
@@ -142,14 +203,11 @@ ${memoryRef.current}
                 return newTranscript;
             });
 
-            // After getting the full response, process it for memory
             if (fullResponseText.trim()) {
                 try {
-                    await processNewTurn(userText, fullResponseText);
+                    await processNewTurn(userText || "[File Analysis]", fullResponseText);
                 } catch (memoryError) {
-                    console.error("Failed to process memory:", memoryError);
-                    // Set a non-critical error to notify user without stopping the session
-                    setError(memoryError instanceof Error ? memoryError.message : "Could not save conversation summary.");
+                    logError(memoryError, ErrorSeverity.MEDIUM, { component: 'InteractiveView', action: 'processNewTurn' });
                 }
             }
 
@@ -158,13 +216,43 @@ ${memoryRef.current}
             setStatus('LISTENING');
 
         } catch (err) {
-            console.error("Error generating AI response:", err);
-            const message = err instanceof Error ? err.message : "An unknown error occurred.";
-            setError(message);
+            logError(err, ErrorSeverity.HIGH, { component: 'InteractiveView', action: 'handleAiResponse', userTextLength: userText?.length });
+            setError(getFriendlyErrorMessage(err));
             setStatus('ERROR');
         }
 
-    }, [analysis, detectedObjects, selectedVoice, speak, captureFrame]);
+    }, [analysis, detectedObjects, selectedVoice, speak, captureFrame, isCameraOn]);
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const base64 = (event.target?.result as string).split(',')[1];
+            setAttachedFile({ data: base64, mimeType: file.type });
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const toggleScreenShare = async () => {
+        if (isScreenSharing) {
+            stopCamera();
+            setIsScreenSharing(false);
+        } else {
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    await videoRef.current.play();
+                    setIsCameraOn(true);
+                    setIsScreenSharing(true);
+                }
+            } catch (err) {
+                setError("Screen sharing failed.");
+            }
+        }
+    };
 
     const { isListening, error: sttError, startListening, stopListening } = useSpeechToText({ 
       onFinalTranscript: handleAiResponse,
@@ -194,16 +282,12 @@ ${memoryRef.current}
     const handleStart = async () => {
         setError(null);
         try {
-            // Load memory at the start of the session
             memoryRef.current = getMemory();
-            if (memoryRef.current) {
-                console.log("Loaded long-term memory for session.");
-            }
         } catch (memoryError) {
-            console.error("Failed to load memory:", memoryError);
-            setError(memoryError instanceof Error ? memoryError.message : "Failed to load memory.");
+            logError(memoryError, ErrorSeverity.HIGH, { component: 'InteractiveView', action: 'handleStart' });
+            setError(getFriendlyErrorMessage(memoryError));
             setStatus('ERROR');
-            return; // Stop the session from starting
+            return;
         }
         await startCamera();
         setStatus('LISTENING');
@@ -230,61 +314,209 @@ ${memoryRef.current}
         }
     }, [isCameraOn, status, isAnalyzing, startAnalysis, stopAnalysis, analysisPrompt]);
 
-    const getButtonContent = () => {
-        if (status === 'PROCESSING' || status === 'SPEAKING') return <><Loader2 className="w-6 h-6 animate-spin" /><span>Processing...</span></>;
-        if (status === 'LISTENING') return <><Square className="w-6 h-6" /><span>Stop Session</span></>;
-        return <><Mic className="w-6 h-6" /><span>Start Interactive Session</span></>;
-    };
-
     const isSessionActive = status !== 'IDLE' && status !== 'ERROR';
     const currentError = error || analysisError || sttError;
 
     return (
-        <div className="flex flex-col h-full p-4 md:p-6 gap-6">
-            <div className="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
-                <div className="flex flex-col gap-4 overflow-hidden">
-                    <h2 className="text-xl font-semibold text-purple-300 flex-shrink-0">Live Vision</h2>
-                    <div className="relative aspect-video rounded-lg overflow-hidden border-2 border-gray-700 bg-black flex items-center justify-center flex-shrink-0">
-                        <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
-                        {!isCameraOn && <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50"><CameraOff className="w-16 h-16 text-gray-500 mb-4" /><p className="text-gray-400">Camera is off</p></div>}
-                        {isCameraOn && videoRect && <svg className="absolute top-0 left-0 pointer-events-none" width={videoRect.width} height={videoRect.height} viewBox={`0 0 ${videoRect.width} ${videoRect.height}`} aria-hidden="true">{detectedObjects.map((obj, index) => (<BoundingBox key={index} object={obj} videoRect={videoRect} />))}</svg>}
+        <div className="flex flex-col lg:flex-row h-full w-full overflow-hidden pb-12 gap-8 lg:gap-0">
+            {/* Left Panel: Vision & Analysis */}
+            <div className="w-full lg:w-1/2 flex flex-col lg:pr-12 gap-6 lg:gap-10 lg:border-r border-white/5">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className={`w-1.5 h-1.5 rounded-full ${isCameraOn ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-white/10'}`} />
+                        <h2 className="text-[10px] uppercase tracking-[0.4em] text-white/30 font-mono font-bold">Vision Stream</h2>
                     </div>
-                    <div className="flex flex-col flex-grow h-full p-4 bg-gray-800/50 rounded-lg overflow-hidden">
-                        <div className="flex items-center gap-3 mb-2 text-sm text-gray-400 flex-shrink-0">
-                            {isAnalyzing && <Loader2 className="w-5 h-5 animate-spin text-purple-400" />}
-                            <p>{isSessionActive ? statusMessage : 'Vision analysis is off.'}</p>
+                    {isAnalyzing && (
+                        <div className="flex items-center gap-2 px-3 py-1 bg-white/[0.03] border border-white/5 rounded-full text-[9px] text-white/40 font-mono uppercase tracking-[0.2em]">
+                            <Activity className="w-3 h-3 text-purple-500 animate-pulse" />
+                            Live Analysis
                         </div>
-                        {analysisError && <div role="alert" className="flex items-center space-x-3 p-2 mb-2 bg-red-900/50 text-red-300 rounded-lg"><XCircle className="w-5 h-5 flex-shrink-0" /><p className="text-sm">{analysisError}</p></div>}
-                        <div className="flex-grow overflow-y-auto prose prose-invert max-w-none scrollbar-thin">
-                            {analysis && <p className="whitespace-pre-wrap mb-4 text-gray-300">{analysis}</p>}
-                            {detectedObjects.length > 0 && <div><h4 className="font-semibold text-gray-300 mb-2 border-t border-gray-700 pt-2">Objects Detected:</h4><ul className="list-disc pl-5 space-y-1 text-sm text-gray-400">{detectedObjects.map((obj, i) => (<li key={i}>{obj.label} ({(obj.confidence * 100).toFixed(0)}%)</li>))}</ul></div>}
-                            {!isAnalyzing && !analysis && detectedObjects.length === 0 && <p className="text-gray-500">Analysis results will appear here.</p>}
+                    )}
+                </div>
+
+                <div className="relative aspect-video rounded-[1.5rem] lg:rounded-[2rem] overflow-hidden glass-panel group bg-black/40">
+                    <video ref={videoRef} className="w-full h-full object-cover grayscale-[0.3] contrast-[1.1] brightness-[0.9]" muted playsInline />
+                    <AnimatePresence>
+                        {!isCameraOn && (
+                            <motion.div 
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md"
+                            >
+                                <CameraOff className="w-10 h-10 text-white/5 mb-4" />
+                                <p className="text-[9px] uppercase tracking-[0.4em] text-white/20 font-mono">Stream Offline</p>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                    {isCameraOn && videoRect && (
+                        <svg className="absolute top-0 left-0 pointer-events-none w-full h-full" viewBox={`0 0 ${videoRect.width} ${videoRect.height}`}>
+                            {detectedObjects.map((obj, index) => {
+                                const objKey = `bbox-${obj.label}-${index}-${obj.box.x1.toFixed(2)}`;
+                                return <BoundingBox key={objKey} object={obj} videoRect={videoRect} />;
+                            })}
+                        </svg>
+                    )}
+                </div>
+
+                <div className="flex-grow flex flex-col gap-4 lg:gap-6 overflow-hidden min-h-[200px]">
+                    <div className="flex items-center gap-2">
+                        <Info className="w-3 h-3 text-white/10" />
+                        <span className="text-[9px] uppercase tracking-[0.4em] text-white/20 font-mono">Neural Interpretation</span>
+                    </div>
+                    <div className="flex-grow glass-panel rounded-[1.5rem] lg:rounded-[2rem] p-6 lg:p-10 overflow-y-auto scrollbar-thin bg-white/[0.01]">
+                        <AnimatePresence mode="wait">
+                            {analysis ? (
+                                <motion.div 
+                                    key={analysis}
+                                    initial={{ opacity: 0, y: 5 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="prose prose-invert prose-p:text-white/60 prose-p:font-light prose-p:leading-relaxed prose-headings:text-white max-w-none"
+                                >
+                                    <div className="markdown-body">
+                                        <Markdown>{analysis}</Markdown>
+                                    </div>
+                                </motion.div>
+                            ) : (
+                                <p className="text-[10px] text-white/10 uppercase tracking-widest font-mono italic">Awaiting visual data...</p>
+                            )}
+                        </AnimatePresence>
+                        
+                        {detectedObjects.length > 0 && (
+                            <div className="mt-6 lg:mt-10 pt-6 lg:pt-8 border-t border-white/5 grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4">
+                                {detectedObjects.map((obj, i) => {
+                                    const labelKey = `label-${obj.label}-${i}`;
+                                    return (
+                                        <div key={labelKey} className="flex items-center justify-between p-2 lg:p-3 bg-white/[0.02] rounded-xl border border-white/5">
+                                            <span className="text-[8px] lg:text-[9px] uppercase tracking-[0.2em] text-white/40 font-mono truncate mr-2">{obj.label}</span>
+                                            <span className="text-[9px] lg:text-[10px] text-purple-400/80 font-mono">{(obj.confidence * 100).toFixed(0)}%</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Right Panel: Conversation & Controls */}
+            <div className="w-full lg:w-1/2 flex flex-col lg:pl-12 gap-6 lg:gap-10">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className={`w-1.5 h-1.5 rounded-full ${isSessionActive ? 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] animate-pulse' : 'bg-white/10'}`} />
+                        <h2 className="text-[10px] uppercase tracking-[0.4em] text-white/30 font-mono font-bold">Neural Link</h2>
+                    </div>
+                    <div className="flex items-center gap-2 lg:gap-4">
+                        <div className="flex items-center gap-2 px-2 sm:px-3 py-1 bg-white/[0.03] border border-white/5 rounded-full">
+                            <div className={`w-1 h-1 rounded-full ${isCameraOn ? 'bg-emerald-500 animate-pulse' : 'bg-white/10'}`} />
+                            <span className="text-[8px] uppercase tracking-widest text-white/30 font-mono hidden sm:inline">Vision</span>
                         </div>
+                        <div className="flex items-center gap-2 px-2 sm:px-3 py-1 bg-white/[0.03] border border-white/5 rounded-full">
+                            <div className={`w-1 h-1 rounded-full ${status === 'PROCESSING' ? 'bg-blue-500 animate-pulse' : 'bg-white/10'}`} />
+                            <span className="text-[8px] uppercase tracking-widest text-white/30 font-mono hidden sm:inline">Search</span>
+                        </div>
+                        <button 
+                            onClick={toggleScreenShare}
+                            className={`p-2 rounded-xl border transition-all ${isScreenSharing ? 'bg-purple-500/20 border-purple-500/50 text-purple-400' : 'bg-white/[0.03] border-white/10 text-white/20 hover:text-white/40'}`}
+                            title="Share Screen"
+                        >
+                            <Monitor className="w-4 h-4" />
+                        </button>
+                        <NewConversationButton onClick={() => setTranscript([])} disabled={isSessionActive} />
+                        <ModelSelector selectedModel={selectedModel} onModelChange={setSelectedModel} disabled={isSessionActive} />
+                        <VoiceSelector selectedVoice={selectedVoice} onVoiceChange={setSelectedVoice} disabled={isSessionActive} />
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-4 overflow-hidden">
-                    <div className="flex items-center justify-between flex-shrink-0">
-                        <h2 className="text-xl font-semibold text-purple-300">Conversation</h2>
-                        <div className="flex items-center space-x-4">
-                            <NewConversationButton onClick={() => setTranscript([])} disabled={isSessionActive} />
-                            <VoiceSelector selectedVoice={selectedVoice} onVoiceChange={setSelectedVoice} disabled={isSessionActive} />
+                <div className="flex-grow flex flex-col min-h-[300px] glass-panel rounded-[1.5rem] lg:rounded-[2rem] overflow-hidden bg-white/[0.01]">
+                    <div className="flex-grow overflow-y-auto p-4 sm:p-6 lg:p-10 scrollbar-thin">
+                        <Transcript transcript={transcript} />
+                    </div>
+                    
+                    <div className="flex-shrink-0 p-4 sm:p-6 lg:p-10 border-t border-white/5 bg-white/[0.01]">
+                        <div className="flex flex-col items-center gap-6 lg:gap-10">
+                            <button 
+                                onClick={isSessionActive ? handleStop : handleStart}
+                                disabled={status === 'PROCESSING'}
+                                className="relative group outline-none transition-transform hover:scale-105 active:scale-95"
+                            >
+                                <VoiceVisualizer status={isSpeaking ? 'SPEAKING' : status} isSpeakingError={!!currentError} />
+                                <div className="absolute inset-0 rounded-full bg-white/0 group-hover:bg-white/5 transition-colors" />
+                                <AnimatePresence>
+                                    {status === 'IDLE' && (
+                                        <motion.div 
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: 10 }}
+                                            className="absolute -bottom-12 sm:-bottom-16 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 bg-white text-black rounded-full shadow-xl"
+                                        >
+                                            <Zap className="w-3 h-3 fill-current" />
+                                            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Initialize Link</span>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </button>
+                            
+                            <div className="w-full flex flex-col items-center gap-4 lg:gap-6">
+                                {currentError && (
+                                    <motion.div 
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className="flex items-center gap-3 px-4 lg:px-5 py-2 lg:py-2.5 bg-red-500/5 border border-red-500/10 rounded-full text-red-400/80 text-[8px] lg:text-[9px] uppercase tracking-[0.2em] font-mono text-center"
+                                    >
+                                        <WifiOff className="w-3 h-3 lg:w-3.5 lg:h-3.5" />
+                                        {currentError}
+                                    </motion.div>
+                                )}
+                                
+                                <div className="w-full flex flex-col gap-4">
+                                    <div className="flex items-center gap-2 sm:gap-4">
+                                        <div className="flex-grow relative flex items-center">
+                                            <input 
+                                                type="text"
+                                                value={inputText}
+                                                onChange={(e) => setInputText(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleAiResponse(inputText)}
+                                                placeholder="Ask ERICA..."
+                                                className="w-full bg-white/[0.03] border border-white/10 rounded-full py-3 sm:py-4 lg:py-6 pl-6 pr-24 sm:pl-8 sm:pr-28 lg:pl-10 lg:pr-32 text-xs sm:text-sm font-light focus:ring-1 focus:ring-purple-500/50 outline-none transition-all placeholder:text-white/10"
+                                            />
+                                            <div className="absolute right-2 sm:right-4 flex items-center gap-1 sm:gap-2">
+                                                <input 
+                                                    type="file" 
+                                                    ref={fileInputRef} 
+                                                    onChange={handleFileUpload} 
+                                                    className="hidden" 
+                                                    accept="image/*,video/*"
+                                                />
+                                                <button 
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    className={`p-1.5 sm:p-2 rounded-full transition-all ${attachedFile ? 'text-purple-400 bg-purple-500/10' : 'text-white/20 hover:text-white/40'}`}
+                                                >
+                                                    <Paperclip className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleAiResponse(inputText, attachedFile || undefined)}
+                                                    disabled={!inputText.trim() && !attachedFile}
+                                                    className="p-1.5 sm:p-2 bg-purple-500 text-white rounded-full hover:scale-110 active:scale-95 transition-all disabled:opacity-20 disabled:grayscale"
+                                                >
+                                                    <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {attachedFile && (
+                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/10 border border-purple-500/20 rounded-xl self-center sm:self-start">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                                            <span className="text-[8px] sm:text-[10px] text-purple-300 uppercase tracking-widest font-mono">File Attached</span>
+                                            <button onClick={() => setAttachedFile(null)} className="ml-1 text-white/20 hover:text-white">✕</button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div className="flex-grow w-full min-h-0 overflow-y-auto p-2 scrollbar-thin"><Transcript transcript={transcript} /></div>
-                    <div className="flex-shrink-0 w-full flex flex-col items-center justify-center space-y-4 pt-4"><VoiceVisualizer status={isSpeaking ? 'SPEAKING' : status} isSpeakingError={!!currentError} /></div>
                 </div>
-            </div>
-            
-            <div className="flex-shrink-0 flex flex-col items-center justify-center space-y-3">
-                 {currentError && <div role="alert" className="flex items-center space-x-2 bg-red-500/20 text-red-300 p-3 rounded-lg max-w-md"><WifiOff className="h-5 w-5 flex-shrink-0" /><p className="text-sm">{currentError}</p></div>}
-                 {!currentError && !isSessionActive && <div className="flex items-center space-x-2 bg-blue-500/10 text-blue-300 p-3 rounded-lg max-w-xl"><Info className="h-5 w-5 flex-shrink-0" /><p className="text-sm">Press the button to start a voice conversation. ERICA will see and hear you.</p></div>}
-                <button
-                    onClick={isSessionActive ? handleStop : handleStart}
-                    disabled={status === 'PROCESSING'}
-                    className={`flex items-center justify-center space-x-3 px-8 py-4 text-lg font-semibold rounded-full transition-all duration-300 focus:outline-none focus:ring-4 disabled:opacity-50 disabled:cursor-wait ${isSessionActive ? "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500/50" : "bg-purple-600 text-white hover:bg-purple-700 focus:ring-purple-500/50"}`}>
-                    {getButtonContent()}
-                </button>
             </div>
         </div>
     );

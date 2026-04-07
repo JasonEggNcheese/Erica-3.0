@@ -93,8 +93,8 @@ export const useObjectDetection = () => {
         
         try {
             if (!aiRef.current) {
-                if (!process.env.API_KEY) throw new Error("API key not found.");
-                aiRef.current = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                if (!process.env.GEMINI_API_KEY) throw new Error("API key not found.");
+                aiRef.current = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
             }
             
             const imagePart = { inlineData: { mimeType: 'image/jpeg', data: frameData } };
@@ -128,7 +128,7 @@ export const useObjectDetection = () => {
             };
 
             const response = await aiRef.current.models.generateContent({
-                model: 'gemini-3-pro-preview',
+                model: 'gemini-3-flash-preview',
                 contents: { parts: [
                     { text: 'Analyze the image to detect and locate objects. For each object, provide its label, a confidence score from 0 to 1, and its normalized bounding box coordinates (x1, y1, x2, y2).' },
                     imagePart

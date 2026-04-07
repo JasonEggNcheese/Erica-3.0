@@ -2,6 +2,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { GoogleGenAI, FunctionDeclaration, Type } from '@google/genai';
 import { AgentAction } from '../types';
+import { logError, getFriendlyErrorMessage, ErrorSeverity } from '../utils/errorLogger';
 
 export const useAgenticVision = () => {
     const [isStreamOn, setIsStreamOn] = useState(false);
@@ -53,16 +54,8 @@ export const useAgenticVision = () => {
             setIsStreamOn(true);
             setStreamType(type);
         } catch (err) {
-            console.error(`${type} access error:`, err);
-            let userMessage = `Failed to access ${type}.`;
-             if (err instanceof DOMException) {
-                if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-                    userMessage = `No ${type} found. Please make sure it is connected and working.`;
-                } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                    userMessage = `${type} access has been denied. Please enable it in your browser settings.`;
-                }
-            }
-            setError(userMessage);
+            logError(err, ErrorSeverity.HIGH, { hook: 'useAgenticVision', action: 'startStream', type });
+            setError(getFriendlyErrorMessage(err));
             stopAllStreams();
         } finally {
             setIsLoading(false);
@@ -102,8 +95,8 @@ export const useAgenticVision = () => {
 
         try {
             if (!aiRef.current) {
-                if (!process.env.API_KEY) throw new Error("API key not found.");
-                aiRef.current = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                if (!process.env.GEMINI_API_KEY) throw new Error("API key not found.");
+                aiRef.current = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
             }
 
             const performActionTool: FunctionDeclaration = {
@@ -164,16 +157,16 @@ export const useAgenticVision = () => {
             });
 
             const functionCalls = response.functionCalls;
-            if (functionCalls && functionCalls.length > 0) {
+            if (functionCalls && functionCalls.length > 0 && functionCalls[0].args) {
                 const actions = functionCalls[0].args.actions as AgentAction[];
-                setAnalysis(actions);
+                setAnalysis(actions || []);
             } else {
                 setAnalysis([{ action_type: 'FINISH', thought: response.text ?? "I'm not sure how to proceed with that request." }]);
             }
 
         } catch (err) {
-            console.error("Agentic analysis error:", err);
-            setError(err instanceof Error ? err.message : "An unknown error occurred during analysis.");
+            logError(err, ErrorSeverity.HIGH, { hook: 'useAgenticVision', action: 'executeCommand', prompt });
+            setError(getFriendlyErrorMessage(err));
         } finally {
             setIsLoading(false);
         }

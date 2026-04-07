@@ -12,11 +12,11 @@ const NewConversationButton: React.FC<NewConversationButtonProps> = ({ onClick, 
     <button
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-300 bg-gray-800/50 border border-gray-700 rounded-lg hover:bg-gray-700/70 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="flex items-center space-x-2 px-4 py-2 text-[10px] uppercase tracking-widest font-mono font-bold text-white/40 bg-white/[0.03] border border-white/10 rounded-full hover:bg-white/[0.08] hover:text-white/60 transition-all duration-500 focus:outline-none focus:ring-1 focus:ring-purple-500/50 disabled:opacity-20 disabled:cursor-not-allowed"
       aria-label="Start new conversation"
     >
-      <PlusCircle className="w-4 h-4" />
-      <span>New Conversation</span>
+      <PlusCircle className="w-3.5 h-3.5" />
+      <span>Reset</span>
     </button>
   );
 };

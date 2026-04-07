@@ -3,6 +3,7 @@ import { useState, useCallback, useRef } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
 import { decode, decodeAudioData } from '../utils/audioUtils';
 import { VoiceId } from '../types';
+import { logError, getFriendlyErrorMessage, ErrorSeverity } from '../utils/errorLogger';
 
 // This hook is self-contained and manages its own AI instance and audio context
 // to avoid conflicts with other audio sources.
@@ -24,8 +25,8 @@ export const useTextToSpeech = () => {
         return new Promise(async (resolve, reject) => {
             try {
                 if (!aiRef.current) {
-                    if (!process.env.API_KEY) throw new Error("API key not found for TTS.");
-                    aiRef.current = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                    if (!process.env.GEMINI_API_KEY) throw new Error("API key not found for TTS.");
+                    aiRef.current = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
                 }
 
                 const response = await aiRef.current.models.generateContent({
@@ -66,9 +67,9 @@ export const useTextToSpeech = () => {
                 };
 
             } catch (error) {
-                console.error("Text-to-speech failed:", error);
+                logError(error, ErrorSeverity.HIGH, { hook: 'useTextToSpeech', action: 'speak', textLength: text.length, voice });
                 setIsSpeaking(false);
-                reject(error);
+                reject(new Error(getFriendlyErrorMessage(error)));
             }
         });
     }, [isSpeaking, selectedVoice]);

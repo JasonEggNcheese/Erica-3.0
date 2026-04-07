@@ -22,15 +22,15 @@ app.get('*', (req, res) => {
     }
 
     // Inject the API key from environment variables
-    const apiKey = process.env.API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
     if (!apiKey) {
-      console.error('API_KEY environment variable not set.');
-      return res.status(500).send('Server configuration error: API_KEY is missing.');
+      console.error('Neither GEMINI_API_KEY nor API_KEY environment variable set.');
+      return res.status(500).send('Server configuration error: API key is missing.');
     }
 
     const injectedHtml = data.replace(
       '<script>__API_KEY_SCRIPT__</script>',
-      `<script>window.process = { env: { API_KEY: "${apiKey}" } };</script>`
+      `<script>window.process = { env: { GEMINI_API_KEY: "${apiKey}" } };</script>`
     );
     
     res.send(injectedHtml);

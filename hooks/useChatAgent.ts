@@ -3,8 +3,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { GoogleGenAI, Chat, GenerateContentResponse } from '@google/genai';
 import { ChatMessage, ChatPart } from '../types';
 import { fileToBase64 } from '../utils/fileUtils';
+import { logError, getFriendlyErrorMessage, ErrorSeverity } from '../utils/errorLogger';
 
-export const useChatAgent = () => {
+export const useChatAgent = (initialMessage?: string | null) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
@@ -15,27 +16,26 @@ export const useChatAgent = () => {
     useEffect(() => {
         const initializeChat = async () => {
             try {
-                if (!process.env.API_KEY) throw new Error("API key not found.");
-                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                if (!process.env.GEMINI_API_KEY) throw new Error("API key not found.");
+                const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
                 chatRef.current = ai.chats.create({
                     model: 'gemini-3-pro-preview',
-                    // Optional: Add a system instruction if needed
-                    // config: {
-                    //   systemInstruction: 'You are ERICA, a helpful multimodal assistant.'
-                    // }
+                    config: {
+                        systemInstruction: 'You are ERICA, an advanced neural interface and helpful multimodal assistant. You are professional, efficient, and slightly futuristic in your tone.'
+                    }
                 });
                 // Add an initial message from the model
                  setMessages([{
                     role: 'model',
-                    parts: [{ text: "Hello! I'm ERICA. You can ask me questions or send me an image to discuss." }]
+                    parts: [{ text: initialMessage || "Hello! I'm ERICA. You can ask me questions or send me an image to discuss." }]
                 }]);
             } catch (err) {
-                console.error("Failed to initialize chat:", err);
-                setError("Could not start a chat session. Please check your API key and network connection.");
+                logError(err, ErrorSeverity.HIGH, { hook: 'useChatAgent', action: 'initializeChat' });
+                setError(getFriendlyErrorMessage(err));
             }
         };
         initializeChat();
-    }, []);
+    }, [initialMessage]);
 
     const sendMessage = useCallback(async (prompt: string, file: File | null) => {
         if (!prompt && !file) {
@@ -61,7 +61,8 @@ export const useChatAgent = () => {
                     },
                 });
             } catch (err) {
-                setError("Failed to process the image file.");
+                logError(err, ErrorSeverity.MEDIUM, { hook: 'useChatAgent', action: 'processFile', fileName: file.name });
+                setError("Failed to process the image file. Please try a different image.");
                 setIsLoading(false);
                 return;
             }
@@ -109,9 +110,8 @@ export const useChatAgent = () => {
                 }
             }
         } catch (err) {
-            console.error("Failed to send message:", err);
-            const message = err instanceof Error ? err.message : "An unknown error occurred.";
-            setError(`Failed to get a response. ${message}`);
+            logError(err, ErrorSeverity.HIGH, { hook: 'useChatAgent', action: 'sendMessage', promptLength: prompt.length });
+            setError(getFriendlyErrorMessage(err));
              setMessages(prev => prev.slice(0, -1)); // Remove the empty model message
         } finally {
             setIsLoading(false);

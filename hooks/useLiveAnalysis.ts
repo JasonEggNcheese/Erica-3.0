@@ -2,6 +2,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import { Gesture, DetectedObject } from '../types';
+import { logError, getFriendlyErrorMessage, ErrorSeverity } from '../utils/errorLogger';
 
 const ANALYSIS_INTERVAL = 3000; // milliseconds
 
@@ -37,16 +38,8 @@ export const useLiveAnalysis = ({ onGestureDetected }: UseLiveAnalysisProps) => 
             setIsCameraOn(true);
             setStatusMessage('Camera is on. Enter a prompt and start analysis.');
         } catch (err) {
-            console.error("Camera access error:", err);
-            let userMessage = "Failed to access camera.";
-             if (err instanceof DOMException) {
-                if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-                    userMessage = 'No camera found. Please make sure it is connected and working.';
-                } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                    userMessage = 'Camera access has been denied. Please enable it in your browser settings.';
-                }
-            }
-            setError(userMessage);
+            logError(err, ErrorSeverity.HIGH, { hook: 'useLiveAnalysis', action: 'startCamera' });
+            setError(getFriendlyErrorMessage(err));
             setStatusMessage('Camera access failed.');
         }
     }, []);
@@ -101,8 +94,8 @@ export const useLiveAnalysis = ({ onGestureDetected }: UseLiveAnalysisProps) => 
         
         try {
             if (!aiRef.current) {
-                if (!process.env.API_KEY) throw new Error("API key not found.");
-                aiRef.current = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                if (!process.env.GEMINI_API_KEY) throw new Error("API key not found.");
+                aiRef.current = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
             }
             
             const imagePart = {
@@ -153,7 +146,7 @@ export const useLiveAnalysis = ({ onGestureDetected }: UseLiveAnalysisProps) => 
             const fullPrompt = `Analyze the scene based on the user's request: "${prompt}". In your analysis, ALWAYS provide a brief overall description of the scene. ALSO, identify all significant objects with labels, confidence scores (0 to 1), and normalized bounding boxes. AND ALSO detect if the user is making a gesture like WAVING, THUMBS_UP, COUNTING_FINGERS, or signing an ASL letter. Respond with a JSON object matching the required schema. If nothing is detected, provide a default description.`;
 
             const response = await aiRef.current.models.generateContent({
-                model: 'gemini-3-pro-preview',
+                model: 'gemini-3-flash-preview',
                 contents: { parts: [{ text: fullPrompt }, imagePart] },
                 config: {
                     responseMimeType: "application/json",
@@ -171,9 +164,8 @@ export const useLiveAnalysis = ({ onGestureDetected }: UseLiveAnalysisProps) => 
             }
 
         } catch (err) {
-            console.error("Frame analysis error:", err);
+            logError(err, ErrorSeverity.MEDIUM, { hook: 'useLiveAnalysis', action: 'analyzeFrame', prompt });
             // Don't halt analysis on minor frame errors, but log them.
-            // setError(err instanceof Error ? err.message : "An unknown error occurred during analysis.");
         } finally {
             isProcessingFrame.current = false;
         }
@@ -223,5 +215,6 @@ export const useLiveAnalysis = ({ onGestureDetected }: UseLiveAnalysisProps) => 
         stopCamera,
         startAnalysis,
         stopAnalysis,
+        setIsCameraOn,
     };
 };

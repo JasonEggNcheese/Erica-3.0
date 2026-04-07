@@ -1,6 +1,6 @@
 {
   "name": "ERICA 3.0: Conversational Voice AI",
-  "description": "A real-time, conversational voice assistant powered by the Gemini Live API. Engage in natural, low-latency conversations with ERICA 3.0, which provides fast, intelligent responses and real-time transcriptions.",
+  "description": "A real-time, conversational voice assistant powered by Gemini, Claude, and GPT. Engage in natural, low-latency conversations with ERICA 3.0, featuring multimodal vision, web search, and cross-model intelligence.",
   "requestFramePermissions": [
     "microphone",
     "camera"

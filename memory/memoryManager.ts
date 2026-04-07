@@ -1,5 +1,6 @@
 
 import { GoogleGenAI } from '@google/genai';
+import { logError, ErrorSeverity } from '../utils/errorLogger';
 
 class StorageError extends Error {
     constructor(message: string) {
@@ -16,11 +17,11 @@ let ai: GoogleGenAI | null = null;
 
 const getAi = () => {
     if (!ai) {
-        if (!process.env.API_KEY) {
-            console.error("API key not found for memory summarization.");
+        if (!process.env.GEMINI_API_KEY) {
+            logError("API key not found for memory summarization.", ErrorSeverity.HIGH, { module: 'memoryManager', action: 'getAi' });
             return null;
         }
-        ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     }
     return ai;
 }
@@ -33,7 +34,7 @@ export const getMemory = (): string | null => {
     try {
         return localStorage.getItem(`${MEMORY_KEY_PREFIX}${USER_ID}`);
     } catch (error) {
-        console.error("Failed to retrieve memory:", error);
+        logError(error, ErrorSeverity.MEDIUM, { module: 'memoryManager', action: 'getMemory' });
         throw new StorageError("Could not access browser storage to load past conversations. Your browser settings might be blocking it.");
     }
 };
@@ -47,7 +48,7 @@ const getHistory = (): string[] => {
         const historyJson = localStorage.getItem(`${HISTORY_KEY_PREFIX}${USER_ID}`);
         return historyJson ? JSON.parse(historyJson) : [];
     } catch (error) {
-        console.error("Failed to retrieve history:", error);
+        logError(error, ErrorSeverity.MEDIUM, { module: 'memoryManager', action: 'getHistory' });
         throw new StorageError("Could not access browser storage to load conversation history.");
     }
 };
@@ -67,7 +68,7 @@ const saveInteraction = (userText: string, ericaText: string) => {
         }
         localStorage.setItem(`${HISTORY_KEY_PREFIX}${USER_ID}`, JSON.stringify(history));
     } catch (error) {
-        console.error("Failed to save interaction:", error);
+        logError(error, ErrorSeverity.MEDIUM, { module: 'memoryManager', action: 'saveInteraction' });
         // Re-throw as a specific StorageError for the caller to handle.
         throw new StorageError("Could not save conversation to browser storage. It might be full or blocked.");
     }
@@ -81,7 +82,7 @@ const updateMemory = (newSummary: string) => {
     try {
         localStorage.setItem(`${MEMORY_KEY_PREFIX}${USER_ID}`, newSummary);
     } catch (error) {
-        console.error("Failed to update memory:", error);
+        logError(error, ErrorSeverity.MEDIUM, { module: 'memoryManager', action: 'updateMemory' });
         throw new StorageError("Could not save summarized memory to browser storage. It might be full or blocked.");
     }
 };
@@ -132,7 +133,7 @@ export const summarizeAndStoreMemory = async () => {
             localStorage.removeItem(`${HISTORY_KEY_PREFIX}${USER_ID}`);
         }
     } catch (error) {
-        console.error("Failed to summarize and store memory:", error);
+        logError(error, ErrorSeverity.MEDIUM, { module: 'memoryManager', action: 'summarizeAndStoreMemory' });
         if (error instanceof StorageError) {
             throw error; // Re-throw our custom error
         }

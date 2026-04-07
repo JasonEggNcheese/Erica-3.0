@@ -1,16 +1,18 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import Markdown from 'react-markdown';
 import { useAgenticVision } from '../hooks/useAgenticVision';
-import { Camera, ScreenShare, Bot, Square, XCircle, Loader2, MousePointerClick, Type, ArrowDown, ArrowUp, CheckCircle2, Hourglass, Lightbulb } from 'lucide-react';
+import { Camera, ScreenShare, Bot, Square, XCircle, Loader2, MousePointerClick, Type, ArrowDown, ArrowUp, CheckCircle2, Hourglass, Lightbulb, Play, Terminal } from 'lucide-react';
 import { AgentAction } from '../types';
 
 const ActionIcon = ({ action_type }: { action_type: AgentAction['action_type'] }) => {
     switch (action_type) {
-        case 'CLICK': return <MousePointerClick className="w-5 h-5 text-blue-400" />;
-        case 'TYPE': return <Type className="w-5 h-5 text-green-400" />;
-        case 'SCROLL': return <ArrowDown className="w-5 h-5 text-yellow-400" />;
-        case 'WAIT': return <Hourglass className="w-5 h-5 text-orange-400" />;
-        case 'FINISH': return <CheckCircle2 className="w-5 h-5 text-teal-400" />;
+        case 'CLICK': return <MousePointerClick className="w-4 h-4 text-blue-400" />;
+        case 'TYPE': return <Type className="w-4 h-4 text-green-400" />;
+        case 'SCROLL': return <ArrowDown className="w-4 h-4 text-yellow-400" />;
+        case 'WAIT': return <Hourglass className="w-4 h-4 text-orange-400" />;
+        case 'FINISH': return <CheckCircle2 className="w-4 h-4 text-teal-400" />;
         default: return null;
     }
 }
@@ -33,14 +35,12 @@ const AgenticVision: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<number[]>([]);
 
-  // Effect to clear timeouts on unmount
   useEffect(() => {
     return () => {
       timeoutRef.current.forEach(clearTimeout);
     };
   }, []);
   
-  // Effect to handle resizing of the video element
   useEffect(() => {
     const updateRect = () => {
       if (videoRef.current) {
@@ -52,14 +52,13 @@ const AgenticVision: React.FC = () => {
     return () => window.removeEventListener('resize', updateRect);
   }, [isStreamOn]);
 
-  // Effect to run the action plan visualization sequence
   useEffect(() => {
     timeoutRef.current.forEach(clearTimeout);
     timeoutRef.current = [];
     setActiveActionIndex(null);
 
     if (analysis && analysis.length > 0) {
-      let delay = 500; // Initial delay before starting the sequence
+      let delay = 500;
       analysis.forEach((action, index) => {
         const actionDuration = action.action_type === 'WAIT' ? (action.duration || 1000) : 2000;
         
@@ -87,16 +86,11 @@ const AgenticVision: React.FC = () => {
   const getTooltipContent = (action: AgentAction | null): string => {
     if (!action) return '';
     switch (action.action_type) {
-        case 'CLICK': 
-            return 'Clicking...';
-        case 'TYPE': 
-            return `Typing: "${action.text_to_type}"`;
-        case 'SCROLL': 
-            return `Scrolling ${action.scroll_direction}`;
-        case 'WAIT': 
-            return `Waiting ${action.duration}ms`;
-        default: 
-            return '';
+        case 'CLICK': return 'Clicking...';
+        case 'TYPE': return `Typing: "${action.text_to_type}"`;
+        case 'SCROLL': return `Scrolling ${action.scroll_direction}`;
+        case 'WAIT': return `Waiting ${action.duration}ms`;
+        default: return '';
     }
   };
 
@@ -106,12 +100,11 @@ const AgenticVision: React.FC = () => {
     if (action.action_type === 'CLICK' && action.x != null && action.y != null) {
         return {
             top: `${action.y * rect.height}px`,
-            left: `${action.x * rect.width + 25}px`, // Offset to the right of the click target
+            left: `${action.x * rect.width + 25}px`,
             transform: 'translateY(-50%)',
             opacity: 1,
         };
     }
-    // Default position for other actions
     return {
         top: '1rem',
         left: '50%',
@@ -121,136 +114,196 @@ const AgenticVision: React.FC = () => {
   };
 
   return (
-    <div className="p-4 md:p-8 h-full flex flex-col gap-6 text-white overflow-y-auto">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
+    <div className="h-full flex flex-col max-w-7xl mx-auto w-full p-8 gap-10 overflow-hidden">
+      <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+              <div className="p-2 bg-white/[0.03] rounded-xl border border-white/5">
+                  <Bot className="w-5 h-5 text-purple-400" />
+              </div>
+              <h2 className="text-[10px] uppercase tracking-[0.4em] text-white/30 font-mono font-bold">Autonomous Vision Agent</h2>
+          </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 flex-grow min-h-0">
         {/* Left Column: Vision Feed and Controls */}
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-4">
-            <h2 className="text-xl font-semibold text-purple-300">1. Start Vision Stream</h2>
-            <div ref={containerRef} className="relative aspect-video rounded-lg overflow-hidden border-2 border-gray-700 bg-black flex items-center justify-center">
-              <video ref={videoRef} className="w-full h-full object-contain" muted playsInline />
-              {!isStreamOn && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50">
-                  <Camera className="w-16 h-16 text-gray-500 mb-4" />
-                  <p className="text-gray-400">Vision is off</p>
-                </div>
-              )}
+        <div className="lg:col-span-7 flex flex-col gap-8">
+          <div className="flex flex-col gap-6">
+            <div ref={containerRef} className="relative aspect-video rounded-[2rem] overflow-hidden glass-panel bg-black/40 group">
+              <video ref={videoRef} className="w-full h-full object-cover grayscale-[0.3] contrast-[1.1] brightness-[0.9]" muted playsInline />
+              <AnimatePresence>
+                {!isStreamOn && (
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md"
+                  >
+                    <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10 mb-5">
+                        <Bot className="w-8 h-8 text-white/10" />
+                    </div>
+                    <p className="text-[9px] uppercase tracking-[0.4em] text-white/20 font-mono">Agent Offline</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              
               {isStreamOn && videoRect && activeAction?.action_type === 'CLICK' && activeAction.x != null && activeAction.y != null && (
-                <svg 
-                  className="absolute top-0 left-0 pointer-events-none" 
-                  width={videoRect.width} 
-                  height={videoRect.height}
-                  viewBox={`0 0 ${videoRect.width} ${videoRect.height}`}
-                  aria-hidden="true"
-                >
+                <svg className="absolute top-0 left-0 pointer-events-none w-full h-full" viewBox={`0 0 ${videoRect.width} ${videoRect.height}`}>
                   <g transform={`translate(${activeAction.x * videoRect.width}, ${activeAction.y * videoRect.height})`}>
-                    <circle r="15" fill="rgba(168, 85, 247, 0.5)" stroke="white" strokeWidth="2"></circle>
-                    <circle r="15" fill="transparent" stroke="#a855f7" strokeWidth="2" className="animate-pulse-ring"></circle>
+                    <motion.circle 
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        r="15" fill="rgba(168, 85, 247, 0.3)" stroke="white" strokeWidth="1" 
+                    />
+                    <circle r="15" fill="transparent" stroke="#a855f7" strokeWidth="2" className="animate-pulse-ring" />
                   </g>
                 </svg>
               )}
               <div 
-                  className={`absolute z-10 p-2 text-sm bg-black/70 rounded-md shadow-lg transition-opacity duration-300 pointer-events-none ${activeAction ? 'opacity-100' : 'opacity-0'}`}
+                  className={`absolute z-10 px-4 py-2 text-[9px] uppercase tracking-[0.2em] font-mono bg-black/80 backdrop-blur-md border border-white/10 rounded-full shadow-2xl transition-opacity duration-500 pointer-events-none ${activeAction ? 'opacity-100' : 'opacity-0'}`}
                   style={getTooltipStyle(activeAction, videoRect)}
               >
                   {getTooltipContent(activeAction)}
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            <div className="grid grid-cols-2 gap-6">
                  <button
                     onClick={() => startStream('camera')}
                     disabled={isLoading}
-                    className="flex items-center justify-center space-x-3 w-full px-6 py-3 text-lg font-semibold rounded-full transition-all duration-300 focus:outline-none focus:ring-4 bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`flex items-center justify-center gap-4 px-8 py-5 rounded-2xl text-[10px] font-bold uppercase tracking-[0.2em] transition-all duration-500 ${streamType === 'camera' ? 'bg-purple-600 text-white shadow-[0_10px_30px_rgba(168,85,247,0.2)]' : 'bg-white/[0.03] border border-white/10 text-white/40 hover:bg-white/[0.08]'}`}
                 >
-                    <Camera className="w-6 h-6" />
-                    <span>{streamType === 'camera' ? 'Restart Camera' : 'Start Camera'}</span>
+                    <Camera className="w-4 h-4" />
+                    <span>{streamType === 'camera' ? 'Reset Cam' : 'Camera'}</span>
                 </button>
                  <button
                     onClick={() => startStream('screen')}
                     disabled={isLoading}
-                    className="flex items-center justify-center space-x-3 w-full px-6 py-3 text-lg font-semibold rounded-full transition-all duration-300 focus:outline-none focus:ring-4 bg-green-700 text-white hover:bg-green-800 focus:ring-green-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`flex items-center justify-center gap-4 px-8 py-5 rounded-2xl text-[10px] font-bold uppercase tracking-[0.2em] transition-all duration-500 ${streamType === 'screen' ? 'bg-purple-600 text-white shadow-[0_10px_30px_rgba(168,85,247,0.2)]' : 'bg-white/[0.03] border border-white/10 text-white/40 hover:bg-white/[0.08]'}`}
                 >
-                    <ScreenShare className="w-6 h-6" />
-                    <span>{streamType === 'screen' ? 'Reshare Screen' : 'Share Screen'}</span>
+                    <ScreenShare className="w-4 h-4" />
+                    <span>{streamType === 'screen' ? 'Reset Screen' : 'Screen'}</span>
                 </button>
             </div>
              {isStreamOn && (
                  <button
                     onClick={stopAllStreams}
                     disabled={isLoading}
-                    className="flex items-center justify-center space-x-3 w-full px-6 py-3 text-lg font-semibold rounded-full transition-all duration-300 focus:outline-none focus:ring-4 bg-red-600 text-white hover:bg-red-700 focus:ring-red-500/50 disabled:opacity-50"
+                    className="flex items-center justify-center gap-4 w-full py-5 bg-white/[0.03] border border-white/10 text-white/40 rounded-2xl text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 transition-all duration-500"
                 >
-                    <Square className="w-6 h-6" />
-                    <span>Stop Vision</span>
+                    <Square className="w-4 h-4" />
+                    <span>Terminate Stream</span>
                 </button>
             )}
           </div>
           
-          <div className="flex flex-col gap-4">
-            <h2 className="text-xl font-semibold text-purple-300">2. Give a Command</h2>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="e.g., Find the search bar and type 'hello world'."
-              className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors disabled:opacity-50"
-              rows={3}
-              disabled={!isStreamOn || isLoading}
-              aria-label="Enter your command for the agent"
-            />
+          <div className="glass-panel rounded-[2rem] p-10 flex flex-col gap-8 bg-white/[0.01]">
+            <div className="flex items-center justify-between">
+                <span className="text-[9px] uppercase tracking-[0.4em] text-white/20 font-mono">Neural Command Input</span>
+                <Bot className="w-4 h-4 text-purple-400/20" />
+            </div>
+            <div className="flex gap-6">
+                <textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder="e.g., Find the search bar and type 'hello world'."
+                  className="flex-grow p-6 bg-white/[0.02] border border-white/10 rounded-[2rem] text-sm font-light focus:ring-1 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all outline-none resize-none placeholder:text-white/10 tracking-wide"
+                  rows={2}
+                  disabled={!isStreamOn || isLoading}
+                />
+                <button
+                    onClick={handleExecute}
+                    disabled={!isStreamOn || !prompt.trim() || isLoading}
+                    className="flex-shrink-0 w-20 h-20 flex items-center justify-center bg-white text-black rounded-[2rem] hover:scale-105 transition-all disabled:opacity-10 disabled:grayscale shadow-[0_20px_50px_rgba(255,255,255,0.1)]"
+                >
+                    {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Play className="w-6 h-6 fill-current" />}
+                </button>
+            </div>
           </div>
-
-          <button
-            onClick={handleExecute}
-            disabled={!isStreamOn || !prompt.trim() || isLoading}
-            className="flex items-center justify-center space-x-3 w-full px-6 py-3 text-lg font-semibold rounded-full transition-all duration-300 focus:outline-none focus:ring-4 bg-purple-600 text-white hover:bg-purple-700 focus:ring-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Bot className="w-6 h-6" />}
-            <span>{isLoading ? 'Thinking...' : 'Execute Command'}</span>
-          </button>
         </div>
 
         {/* Right Column: Analysis Result */}
-        <div className="flex flex-col gap-4">
-           <h2 id="action-plan-heading" className="text-xl font-semibold text-purple-300">3. Action Plan</h2>
-            <div className="flex flex-col h-full p-6 bg-gray-800/50 rounded-lg overflow-y-auto">
-                {error && (
-                  <div role="alert" className="flex items-center space-x-3 p-4 mb-4 bg-red-900/50 text-red-300 rounded-lg">
-                    <XCircle className="w-6 h-6 flex-shrink-0" />
-                    <p>{error}</p>
-                  </div>
-                )}
-                
-                {!isLoading && analysis.length === 0 && !error && (
-                    <div className="flex flex-col items-center justify-center h-full text-center">
-                        <Bot className="w-12 h-12 text-gray-500 mb-4" />
-                        <p className="text-gray-400">The agent's action plan will appear here.</p>
+        <div className="lg:col-span-5 flex flex-col min-h-0">
+            <div className="glass-panel rounded-[2rem] flex flex-col h-full overflow-hidden bg-white/[0.01]">
+                <div className="p-8 border-b border-white/5 bg-white/[0.01] flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <Terminal className="w-3.5 h-3.5 text-purple-500" />
+                        <span className="text-[9px] uppercase tracking-[0.4em] text-white/20 font-mono">Execution Sequence</span>
                     </div>
-                )}
+                    {isLoading && <div className="flex gap-1.5">
+                        {[0, 1, 2].map(i => <div key={i} className="w-1 h-1 rounded-full bg-purple-500 animate-pulse" style={{ animationDelay: `${i * 0.2}s` }} />)}
+                    </div>}
+                </div>
+                
+                <div className="flex-grow p-10 overflow-y-auto scrollbar-thin">
+                    <AnimatePresence mode="wait">
+                        {error && (
+                          <motion.div 
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="flex items-center gap-4 p-5 bg-red-500/5 border border-red-500/10 rounded-2xl text-red-400 text-xs mb-8"
+                          >
+                            <XCircle className="w-5 h-5 flex-shrink-0" />
+                            <p>{error}</p>
+                          </motion.div>
+                        )}
+                        
+                        {!isLoading && analysis.length === 0 && !error && (
+                            <motion.div 
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="flex flex-col items-center justify-center h-full text-center gap-5"
+                            >
+                                <Bot className="w-10 h-10 text-white/5" />
+                                <p className="text-[9px] uppercase tracking-[0.4em] text-white/10 font-mono">Awaiting Command</p>
+                            </motion.div>
+                        )}
 
-                <ul className="space-y-4" aria-labelledby="action-plan-heading">
-                    {analysis.map((action, index) => (
-                        <li key={index}>
-                            <div className={`bg-gray-900/70 p-4 rounded-lg border transition-all duration-300 ${index === activeActionIndex ? 'border-purple-500 shadow-lg shadow-purple-500/20' : 'border-gray-700'}`}>
-                                <div className="flex items-start gap-4">
-                                    <div className="flex-shrink-0 pt-1">
-                                        <ActionIcon action_type={action.action_type} />
-                                    </div>
-                                    <div className="flex-grow">
-                                        <p className="font-semibold text-lg">{action.action_type}</p>
-                                        {action.action_type === 'CLICK' && <p className="text-sm text-gray-300">Coordinates: ({action.x?.toFixed(2)}, {action.y?.toFixed(2)})</p>}
-                                        {action.action_type === 'TYPE' && <p className="text-sm text-gray-300">Text: "{action.text_to_type}"</p>}
-                                        {action.action_type === 'SCROLL' && <p className="text-sm text-gray-300">Direction: {action.scroll_direction}</p>}
-                                        {action.action_type === 'WAIT' && <p className="text-sm text-gray-300">Duration: {action.duration}ms</p>}
-                                    </div>
-                                </div>
-                                <div className="mt-3 pt-3 border-t border-gray-700/50 flex items-start gap-3 text-sm text-gray-400">
-                                    <Lightbulb className="w-5 h-5 flex-shrink-0 text-yellow-500 mt-0.5" />
-                                    <p className="italic">{action.thought}</p>
-                                </div>
-                            </div>
-                        </li>
-                    ))}
-                </ul>
+                        <div className="space-y-6">
+                            {analysis.map((action, index) => {
+                                const actionKey = `action-${index}-${action.action_type}-${action.thought.substring(0, 10)}`;
+                                return (
+                                    <motion.div 
+                                        key={actionKey}
+                                        initial={{ opacity: 0, x: -10 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: index * 0.1 }}
+                                        className={`
+                                            p-6 rounded-[1.5rem] border transition-all duration-700
+                                            ${index === activeActionIndex 
+                                                ? 'bg-white/[0.05] border-white/20 shadow-[0_10px_30px_rgba(255,255,255,0.05)]' 
+                                                : 'bg-white/[0.01] border-white/5'
+                                            }
+                                        `}
+                                    >
+                                        <div className="flex items-start gap-5">
+                                            <div className={`p-2.5 rounded-xl ${index === activeActionIndex ? 'bg-purple-600/20' : 'bg-white/5'}`}>
+                                                <ActionIcon action_type={action.action_type} />
+                                            </div>
+                                            <div className="flex-grow">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-white/80">{action.action_type}</span>
+                                                    <span className="text-[8px] font-mono text-white/20">STEP 0{index + 1}</span>
+                                                </div>
+                                                <div className="text-[9px] text-white/30 font-mono lowercase tracking-wider">
+                                                    {action.action_type === 'CLICK' && `target: ${action.x?.toFixed(2)}, ${action.y?.toFixed(2)}`}
+                                                    {action.action_type === 'TYPE' && `input: "${action.text_to_type}"`}
+                                                    {action.action_type === 'SCROLL' && `dir: ${action.scroll_direction}`}
+                                                    {action.action_type === 'WAIT' && `delay: ${action.duration}ms`}
+                                                </div>
+                                                <div className="mt-4 flex items-start gap-2">
+                                                    <Lightbulb className="w-3 h-3 text-yellow-500/20 mt-0.5" />
+                                                    <div className="text-xs text-white/60 font-light italic leading-relaxed markdown-body">
+                                                        <Markdown>{action.thought}</Markdown>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
+                        </div>
+                    </AnimatePresence>
+                </div>
             </div>
         </div>
       </div>
